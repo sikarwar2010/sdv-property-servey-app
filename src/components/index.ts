@@ -4,7 +4,7 @@ export * from './AppDropdown';
 export * from './AppHeader';
 export * from './Primitives';
 export * from './SurveyCard';
-export * from './OfflineBanner';
+export * from './offlineBanner';
 export * from './States';
 export * from './GPSButton';
 export * from './ImageUploader';

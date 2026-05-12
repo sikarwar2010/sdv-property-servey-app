@@ -1,6 +1,6 @@
-import { useTheme } from '@/theme';
-import type { PhotoRef } from '@/types';
-import { makeId } from '@/utils/format';
+import { useTheme } from '@/src/theme';
+import type { PhotoRef } from '@/src/types';
+import { makeId } from '@/src/utils/format';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { Alert, Image, Pressable, Text, View } from 'react-native';

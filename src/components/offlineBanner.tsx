@@ -1,5 +1,5 @@
-import { useIsOnline, useNetworkStore } from '@/stores/network';
-import { timeAgo } from '@/utils/format';
+import { useIsOnline, useNetworkStore } from '@/src/stores/network';
+import { timeAgo } from '@/src/utils/format';
 import { Ionicons } from '@expo/vector-icons';
 import { useEffect } from 'react';
 import { Text } from 'react-native';

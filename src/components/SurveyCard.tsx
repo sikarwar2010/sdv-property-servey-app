@@ -1,8 +1,8 @@
 import { Pressable, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { StatusBadge } from './Primitives';
-import { timeAgo } from '@/utils/format';
-import type { SurveyRecord } from '@/types';
+import { timeAgo } from '@/src/utils/format';
+import type { SurveyRecord } from '@/src/types';
 
 interface Props {
   survey: SurveyRecord;

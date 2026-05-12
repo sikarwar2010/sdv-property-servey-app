@@ -1,4 +1,4 @@
-import type { SurveyStatus } from '@/types';
+import type { SurveyStatus } from '@/src/types';
 import { Ionicons } from '@expo/vector-icons';
 import { Pressable, Text, View } from 'react-native';
 

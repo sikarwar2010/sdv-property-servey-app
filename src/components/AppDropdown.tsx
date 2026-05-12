@@ -1,4 +1,4 @@
-import type { DropdownOption } from '@/types';
+import type { DropdownOption } from '@/src/types';
 import { Ionicons } from '@expo/vector-icons';
 import { useMemo, useState } from 'react';
 import { FlatList, Modal, Pressable, Text, TextInput, View } from 'react-native';
