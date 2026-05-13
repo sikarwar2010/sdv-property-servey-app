@@ -1,25 +1,34 @@
-import { useState } from 'react';
-import { ScrollView, Text, View } from 'react-native';
-import { Href, useRouter } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
 import { AppButton, AppCard, AppDropdown, AppHeader, AppInput } from '@/src/components';
-import { useSurveyStore } from '@/src/stores/survey';
 import { assessmentYears, ulbs, wards } from '@/src/mocks/masters';
-
+import { useSurveyStore } from '@/src/stores/survey';
+import { Ionicons } from '@expo/vector-icons';
+import { Href, useRouter } from 'expo-router';
+import { useEffect, useState } from 'react';
+import { ScrollView, Text, View } from 'react-native';
 
 export default function NewSurveyScreen() {
   const router = useRouter();
   const draft = useSurveyStore((s) => s.draft);
   const update = useSurveyStore((s) => s.updateDraft);
   const startDraft = useSurveyStore((s) => s.startDraft);
+  const [propertyNo, setPropertyNo] = useState('');
+
+  useEffect(() => {
+    if (!draft) {
+      startDraft();
+    }
+  }, [draft, startDraft]);
+
+  useEffect(() => {
+    if (draft) {
+      setPropertyNo(draft.propertyNo);
+    }
+  }, [draft]);
 
   // Auto-init draft if entered directly
   if (!draft) {
-    startDraft();
     return null;
   }
-
-  const [propertyNo, setPropertyNo] = useState(draft.propertyNo);
   const wardOptions = wards.filter((w) => w.ulbCode === draft.ulbCode).map((w) => ({ value: w.wardNo, label: w.name }));
 
   const handleContinue = () => {
