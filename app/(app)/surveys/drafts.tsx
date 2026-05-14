@@ -1,11 +1,11 @@
-import { Alert, FlatList, Pressable, Text, View } from 'react-native';
-import { Href, useRouter } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
 import { AppButton, AppHeader, EmptyState } from '@/src/components';
 import { useSurveyStore } from '@/src/stores/survey';
 import { timeAgo } from '@/src/utils/format';
+import { Ionicons } from '@expo/vector-icons';
+import { Href, useRouter } from 'expo-router';
+import { Alert, FlatList, Pressable, Text, View } from 'react-native';
 
-const STEP_NAMES = ['Property', 'Owner', 'Address', 'Tax', 'Area', 'Services', 'GIS', 'Photos'];
+const STEP_NAMES = ['Property details', 'Owner', 'Address', 'Tax', 'Area', 'Services', 'GIS', 'Photos'];
 
 export default function DraftsScreen() {
   const router = useRouter();

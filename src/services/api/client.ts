@@ -7,15 +7,15 @@
  *   - Per-request `x-request-id` for log correlation
  *   - Configurable timeout from env
  */
+import { env } from '@/src/config/env';
+import { tokenStorage, type StoredTokens } from '@/src/services/auth/token-storage';
+import type { ApiEnvelope, ApiError, AuthTokens, RefreshTokenResponse } from '@/src/types/api';
 import axios, {
   type AxiosError,
   type AxiosInstance,
   type AxiosRequestConfig,
   type InternalAxiosRequestConfig,
 } from 'axios';
-import { env } from '@/src/config/env';
-import { tokenStorage, type StoredTokens } from '@/src/services/auth/token-storage';
-import type { ApiError, ApiEnvelope, AuthTokens, RefreshTokenResponse } from '@/src/types/api';
 
 type RetriableConfig = InternalAxiosRequestConfig & { _retried?: boolean };
 
@@ -73,6 +73,9 @@ function makeClient(): AxiosInstance {
     const tokens = await ensureFreshToken(client);
     if (tokens) {
       config.headers.set('authorization', `Bearer ${tokens.accessToken}`);
+    }
+    if (env.surveySyncApiKey) {
+      config.headers.set('x-api-key', env.surveySyncApiKey);
     }
     config.headers.set('x-request-id', genRequestId());
     config.headers.set('x-app-version', env.appVersion);

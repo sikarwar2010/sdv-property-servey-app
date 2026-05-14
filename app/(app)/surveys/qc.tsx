@@ -1,11 +1,11 @@
-import { useState } from 'react';
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
-import { Href, useLocalSearchParams, useRouter } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
 import { AppButton, AppHeader, EmptyState } from '@/src/components';
 import { useSurveyStore } from '@/src/stores/survey';
-import { timeAgo } from '@/src/utils/format';
 import { UserRole } from '@/src/types';
+import { timeAgo } from '@/src/utils/format';
+import { Ionicons } from '@expo/vector-icons';
+import { Href, useLocalSearchParams, useRouter } from 'expo-router';
+import { useState } from 'react';
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 
 const SECTION_LABELS: Record<string, string> = {
   property: 'Property details',
@@ -90,7 +90,7 @@ export default function QcScreen() {
 
           {/* Thread */}
           {remarks.map((r) => {
-            const isSupervisor = r.authorRole === 'supervisor' as UserRole;
+            const isSupervisor = r.authorRole === ('supervisor' as UserRole);
             return (
               <View key={r.id} className={['mb-3 flex-row', isSupervisor ? '' : 'flex-row-reverse'].join(' ')}>
                 <View

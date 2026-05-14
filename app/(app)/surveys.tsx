@@ -71,10 +71,12 @@ export default function SurveysListScreen() {
               </Pressable>
               <Pressable
                 onPress={handleNew}
-                className="flex-row items-center px-3.5 py-2 rounded-full bg-brand active:bg-brand-strong"
+                className="flex-row items-center px-3 py-2 rounded-full bg-brand active:bg-brand-strong max-w-[52%]"
               >
                 <Ionicons name="add" size={16} color="#FFFFFF" />
-                <Text className="ml-1 text-[12px] font-medium text-white">New</Text>
+                <Text className="ml-1 text-[11px] font-medium text-white shrink" numberOfLines={1}>
+                  New survey
+                </Text>
               </Pressable>
             </View>
           </View>

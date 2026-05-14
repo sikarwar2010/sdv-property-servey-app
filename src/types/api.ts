@@ -116,7 +116,7 @@ export interface GpsDto {
 
 export interface PhotoDto {
   id: string;
-  slot: 'front' | 'inside' | 'side' | 'document';
+  slot: 'front' | 'side';
   serverKey?: string; // S3 key once uploaded
   sizeKb?: number;
   width?: number;
@@ -143,6 +143,8 @@ export interface SurveyDto {
   houseNo: string;
   street: string;
   locality: string;
+  /** Optional; supported when server / client both handle it. */
+  colony?: string;
   city: string;
   pinCode: string;
   // section 4: taxation

@@ -3,6 +3,12 @@ export function sqftToSqm(sqft: number): number {
   return Math.round(sqft * 0.092903 * 10) / 10;
 }
 
+/** sqft → sqm as fixed decimal string (matches common survey paper forms). */
+export function sqftToSqmDetailed(sqft: number): string {
+  if (!Number.isFinite(sqft) || sqft <= 0) return '0.0000';
+  return (sqft * 0.09290304).toFixed(4);
+}
+
 /** sqm → sqft */
 export function sqmToSqft(sqm: number): number {
   return Math.round(sqm * 10.7639);

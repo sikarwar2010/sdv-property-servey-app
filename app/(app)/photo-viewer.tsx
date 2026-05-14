@@ -1,17 +1,26 @@
+import { Ionicons } from '@expo/vector-icons';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
 import { useState } from 'react';
 import { Dimensions, FlatList, Image, Pressable, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import { StatusBar } from 'expo-status-bar';
-import { Ionicons } from '@expo/vector-icons';
 
 const { width } = Dimensions.get('window');
 
 // Sample local images for demo; in real app, photos come from store
 const DEMO_PHOTOS = [
-  { id: 'p1', slot: 'front', uri: 'https://images.unsplash.com/photo-1564013799919-ab600027ffc6?w=800', sizeKb: 122 },
-  { id: 'p2', slot: 'inside', uri: 'https://images.unsplash.com/photo-1586023492125-27b2c045efd7?w=800', sizeKb: 134 },
-  { id: 'p3', slot: 'side', uri: 'https://images.unsplash.com/photo-1568605114967-8130f3a36994?w=800', sizeKb: 118 },
+  {
+    id: 'p1',
+    slot: 'front' as const,
+    uri: 'https://images.unsplash.com/photo-1564013799919-ab600027ffc6?w=800',
+    sizeKb: 122,
+  },
+  {
+    id: 'p2',
+    slot: 'side' as const,
+    uri: 'https://images.unsplash.com/photo-1568605114967-8130f3a36994?w=800',
+    sizeKb: 118,
+  },
 ];
 
 export default function PhotoViewerScreen() {

@@ -53,8 +53,11 @@ export interface PhotoRef {
   id: string;
   localUri: string;
   objectKey?: string;
-  slot: 'front' | 'side' | 'inside' | 'document';
+  slot: 'front' | 'side';
   sizeKb: number;
+  /** Set when the image is compressed so WatermelonDB / sync can persist dimensions. */
+  width?: number;
+  height?: number;
   uploadStatus: 'idle' | 'uploading' | 'done' | 'failed';
   uploadProgress?: number;
 }
@@ -72,6 +75,11 @@ export interface SurveyRecord {
   serverId?: string;
   status: SurveyStatus;
   ownerName: string;
+  /** When respondent differs from owner (wizard captures both). */
+  respondentName?: string;
+  relationship?: string;
+  fatherOrHusbandName?: string;
+  alternateMobileNo?: string;
   propertyNo: string;
   ulbCode: string;
   ulbName: string;

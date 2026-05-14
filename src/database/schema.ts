@@ -85,7 +85,7 @@ export const schema = appSchema({
       name: 'photos',
       columns: [
         { name: 'survey_id', type: 'string', isIndexed: true },
-        { name: 'slot', type: 'string' }, // front|inside|side|document
+        { name: 'slot', type: 'string' }, // front|side
         { name: 'local_uri', type: 'string' }, // compressed file on device
         { name: 'server_key', type: 'string', isOptional: true },
         { name: 'size_kb', type: 'number' },

@@ -7,11 +7,8 @@
     "icon": "./assets/images/icon.png",
     "scheme": "sdvpropertysurveyapps",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
-    "jsEngine": "hermes",
     "ios": {
-      "supportsTablet": true,
-      "jsEngine": "jsc"
+      "supportsTablet": true
     },
     "android": {
       "adaptiveIcon": {
@@ -20,7 +17,6 @@
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
-      "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
       "package": "com.sdv.propertysurvey",
       "permissions": [
@@ -47,7 +43,22 @@
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
+      "expo-dev-client",
+      "./plugins/withWatermelonNative",
       "expo-router",
+      [
+        "react-native-maps",
+        {
+          "androidGoogleMapsApiKey": "REPLACE_WITH_ANDROID_GOOGLE_MAPS_KEY"
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow $(PRODUCT_NAME) to access your photos to attach survey property images.",
+          "cameraPermission": "Allow $(PRODUCT_NAME) to use the camera to capture survey property photos."
+        }
+      ],
       [
         "expo-splash-screen",
         {
@@ -59,11 +70,27 @@
             "backgroundColor": "#000000"
           }
         }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "packagingOptions": {
+              "pickFirst": [
+                "**/libc++_shared.so"
+              ]
+            }
+          }
+        }
       ]
     ],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "apiBaseUrl": "https://api.sdvedutech.in/v1",
+      "surveySyncApiKey": ""
     }
   }
 }

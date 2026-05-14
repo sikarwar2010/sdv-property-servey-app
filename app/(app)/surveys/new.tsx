@@ -1,17 +1,20 @@
-import { AppButton, AppCard, AppDropdown, AppHeader, AppInput } from '@/src/components';
+import { AppButton, AppCard, AppDropdown, AppHeader } from '@/src/components';
+import { surveyRepo } from '@/src/database/survey.repo';
 import { assessmentYears, ulbs, wards } from '@/src/mocks/masters';
+import { useAuthStore } from '@/src/stores/auth';
 import { useSurveyStore } from '@/src/stores/survey';
 import { Ionicons } from '@expo/vector-icons';
 import { Href, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { ScrollView, Text, View } from 'react-native';
+import { Alert, ScrollView, Text, View } from 'react-native';
 
 export default function NewSurveyScreen() {
   const router = useRouter();
+  const user = useAuthStore((s) => s.user);
   const draft = useSurveyStore((s) => s.draft);
   const update = useSurveyStore((s) => s.updateDraft);
   const startDraft = useSurveyStore((s) => s.startDraft);
-  const [propertyNo, setPropertyNo] = useState('');
+  const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     if (!draft) {
@@ -19,21 +22,32 @@ export default function NewSurveyScreen() {
     }
   }, [draft, startDraft]);
 
-  useEffect(() => {
-    if (draft) {
-      setPropertyNo(draft.propertyNo);
-    }
-  }, [draft]);
-
   // Auto-init draft if entered directly
   if (!draft) {
     return null;
   }
   const wardOptions = wards.filter((w) => w.ulbCode === draft.ulbCode).map((w) => ({ value: w.wardNo, label: w.name }));
 
-  const handleContinue = () => {
-    update({ propertyNo, step: 1 });
-    router.push('/(app)/surveys/wizard' as Href);
+  const handleContinue = async () => {
+    if (!draft) return;
+    if (!user) {
+      Alert.alert('Sign in required', 'Log in to create a survey stored on this device.');
+      return;
+    }
+    setBusy(true);
+    try {
+      if (!draft.wmSurveyId) {
+        const row = await surveyRepo.createDraft(user.id);
+        update({ wmSurveyId: row.id, id: row.localId });
+      }
+      const live = useSurveyStore.getState().draft;
+      if (!live?.wmSurveyId) return;
+      await surveyRepo.writeWizardDraft(live.wmSurveyId, { ...live, step: 1 });
+      update({ step: 1 });
+      router.push('/(app)/surveys/wizard' as Href);
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
@@ -71,6 +85,14 @@ export default function NewSurveyScreen() {
               update({ ulbCode: code, ulbName: u?.name ?? '', wardNo: '' });
             }}
           />
+          {draft.ulbCode ? (
+            <View className="mt-2.5 pt-2.5 border-t border-line-subtle">
+              <Text className="text-[11px] uppercase tracking-wider font-medium text-ink-secondary-light dark:text-ink-secondary-dark mb-0.5">
+                ULB code
+              </Text>
+              <Text className="text-body text-ink-primary-light dark:text-ink-primary-dark">{draft.ulbCode}</Text>
+            </View>
+          ) : null}
         </AppCard>
 
         <AppCard padded className="mb-3">
@@ -84,24 +106,12 @@ export default function NewSurveyScreen() {
           />
         </AppCard>
 
-        <AppCard padded className="mb-3">
-          <AppInput
-            label="Property no. (optional)"
-            placeholder="e.g. PR-12-00482"
-            value={propertyNo}
-            onChangeText={setPropertyNo}
-            iconLeft="barcode-outline"
-            iconRight="qr-code-outline"
-            onPressRightIcon={() => undefined}
-            helper="Scan QR or auto-generate on save"
-          />
-        </AppCard>
-
         <AppButton
           label="Continue"
           iconRight="arrow-forward"
-          onPress={handleContinue}
-          disabled={!draft.assessmentYear || !draft.ulbCode || !draft.wardNo}
+          onPress={() => void handleContinue()}
+          disabled={!draft.assessmentYear || !draft.ulbCode || !draft.wardNo || busy}
+          loading={busy}
           fullWidth
           className="mt-2"
         />

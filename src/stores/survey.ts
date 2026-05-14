@@ -1,35 +1,50 @@
+import { surveyRepo } from '@/src/database/survey.repo';
 import { kpiData as initialKpi, mockNotifications, mockSurveys, mockSyncQueue } from '@/src/mocks/surveys';
+import { syncEngine } from '@/src/sync/sync-engine';
 import type { FloorData, GpsCoord, NotificationItem, PhotoRef, SurveyRecord, SyncQueueItem } from '@/src/types';
 import { makeId } from '@/src/utils/format';
 import { create } from 'zustand';
 
 interface DraftSurvey {
   id: string;
+  /** WatermelonDB `surveys.id` for this draft; set when starting from New survey. */
+  wmSurveyId?: string;
   step: number;
-  // Step 1 - Property details
+  // Step 1 — Property details
   assessmentYear: string;
   ulbCode: string;
   ulbName: string;
   wardNo: string;
+  eNagarpalikaId: string;
+  parcelNo: string;
   propertyNo: string;
+  constructedYear: string;
   isSlum: boolean | null;
   // Step 2 - Owner
   respondentName: string;
   relationship: string;
   family: number;
+  ownerName: string;
+  fatherOrHusbandName: string;
   mobileNo: string;
+  alternateMobileNo: string;
   // Step 3 - Address
+  sectorNumber: string;
   houseNo: string;
   streetName: string;
   locality: string;
+  colony: string;
   city: string;
   pinCode: string;
   // Step 4 - Taxation
   taxRateZone: string;
-  ownership: string;
+  ownershipType: string;
+  /** Required when `ownershipType` is `individual`. */
+  individualTenancy: string;
   propertyType: string;
   propertyUse: string;
   roadType: string;
+  situation: string;
   // Step 5 - Area & floors
   plotSqft: number;
   plinthSqft: number;
@@ -47,27 +62,38 @@ interface DraftSurvey {
 
 const emptyDraft = (): DraftSurvey => ({
   id: makeId('draft'),
+  wmSurveyId: undefined,
   step: 1,
   assessmentYear: '2025-26',
   ulbCode: 'MNP-027',
   ulbName: 'Mathura Nagar Panchayat',
   wardNo: '12',
+  eNagarpalikaId: '',
+  parcelNo: '',
   propertyNo: '',
+  constructedYear: '',
   isSlum: false,
   respondentName: '',
   relationship: 'self',
-  family: 0,
+  family: 1,
+  ownerName: '',
+  fatherOrHusbandName: '',
   mobileNo: '',
+  alternateMobileNo: '',
+  sectorNumber: '',
   houseNo: '',
   streetName: '',
   locality: '',
+  colony: '',
   city: 'Mathura',
   pinCode: '',
-  taxRateZone: 'A',
-  ownership: 'individual',
+  taxRateZone: 'below_9m',
+  ownershipType: 'individual',
+  individualTenancy: 'single',
   propertyType: 'residential',
-  propertyUse: 'self',
-  roadType: 'pakka_narrow',
+  propertyUse: 'shop',
+  roadType: 'kaccha',
+  situation: 'interior',
   plotSqft: 0,
   plinthSqft: 0,
   floors: [],
@@ -90,9 +116,9 @@ interface SurveyState {
   addFloor: (floor: Omit<FloorData, 'id'>) => void;
   updateFloor: (id: string, patch: Partial<FloorData>) => void;
   removeFloor: (id: string) => void;
-  saveDraft: () => void;
+  saveDraft: () => void | Promise<void>;
   cancelDraft: () => void;
-  submitSurvey: () => void;
+  submitSurvey: () => Promise<void>;
   markNotificationRead: (id: string) => void;
   markAllNotificationsRead: () => void;
 }
@@ -134,26 +160,37 @@ export const useSurveyStore = create<SurveyState>((set, get) => ({
       };
     }),
 
-  saveDraft: () => {
-    // In real app, this writes to WatermelonDB. Here, just log.
+  saveDraft: async () => {
     const { draft } = get();
-    if (!draft) return;
-    // eslint-disable-next-line no-console
-    console.log('[draft saved]', draft.id, 'step', draft.step);
+    if (!draft?.wmSurveyId) {
+      // eslint-disable-next-line no-console
+      console.log('[draft saved] no Watermelon row yet — continue from New survey first');
+      return;
+    }
+    await surveyRepo.writeWizardDraft(draft.wmSurveyId, draft);
   },
 
   cancelDraft: () => set({ draft: null }),
 
-  submitSurvey: () => {
+  submitSurvey: async () => {
     const { draft, surveys, kpi } = get();
-    if (!draft) return;
+    if (!draft || !draft.wmSurveyId) return;
+
+    await surveyRepo.writeWizardDraft(draft.wmSurveyId, draft);
+    await surveyRepo.markDirty(draft.wmSurveyId);
+    void syncEngine.run();
+
     const now = new Date().toISOString();
     const builtUp = draft.floors.reduce((acc, f) => acc + f.areaSqft, 0);
     const newSurvey: SurveyRecord = {
       id: makeId('s'),
       localId: draft.id,
       status: 'pending',
-      ownerName: draft.respondentName || 'Untitled',
+      ownerName: draft.ownerName.trim() || draft.respondentName.trim() || 'Untitled',
+      respondentName: draft.respondentName,
+      relationship: draft.relationship,
+      fatherOrHusbandName: draft.fatherOrHusbandName,
+      alternateMobileNo: draft.alternateMobileNo,
       propertyNo:
         draft.propertyNo ||
         `PR-${draft.wardNo}-${Math.floor(Math.random() * 10000)
@@ -162,7 +199,10 @@ export const useSurveyStore = create<SurveyState>((set, get) => ({
       ulbCode: draft.ulbCode,
       ulbName: draft.ulbName,
       wardNo: draft.wardNo,
-      addressLine: [draft.houseNo, draft.streetName].filter(Boolean).join(', '),
+      addressLine: [draft.houseNo, draft.streetName, draft.locality, draft.colony, draft.city, draft.pinCode]
+        .map((s) => String(s).trim())
+        .filter(Boolean)
+        .join(', '),
       mobileNo: draft.mobileNo,
       family: draft.family,
       plotSqft: draft.plotSqft,

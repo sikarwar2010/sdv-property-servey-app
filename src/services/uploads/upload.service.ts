@@ -9,8 +9,13 @@ import { apiClient } from '@/src/services/api/client';
 import { tokenStorage } from '@/src/services/auth/token-storage';
 import type { ApiEnvelope, PhotoUploadResponse } from '@/src/types/api';
 import axios from 'axios';
-import * as FileSystem from 'expo-file-system';
+import { File as ExpoFile } from 'expo-file-system';
 import * as ImageManipulator from 'expo-image-manipulator';
+
+function fileSizeKb(uri: string): number {
+  const f = new ExpoFile(uri);
+  return f.exists ? Math.round(f.size / 1024) : 0;
+}
 
 export interface CompressionResult {
   uri: string;
@@ -21,7 +26,7 @@ export interface CompressionResult {
 
 export interface UploadOptions {
   surveyId: string;
-  slot: 'front' | 'inside' | 'side' | 'document';
+  slot: 'front' | 'side';
   capturedAt: string;
   onProgress?: (loaded: number, total: number) => void;
   signal?: AbortSignal;
@@ -45,8 +50,7 @@ export const uploadService = {
         compress: quality,
         format: ImageManipulator.SaveFormat.JPEG,
       });
-      const info = await FileSystem.getInfoAsync(lastResult.uri);
-      const sizeKb = info.exists && 'size' in info ? Math.round(info.size / 1024) : 0;
+      const sizeKb = fileSizeKb(lastResult.uri);
       if (sizeKb <= targetKb) {
         return { uri: lastResult.uri, sizeKb, width: lastResult.width, height: lastResult.height };
       }
@@ -54,10 +58,9 @@ export const uploadService = {
     }
 
     // Even after 4 attempts, return what we have (don't block the user).
-    const info = await FileSystem.getInfoAsync(lastResult!.uri);
     return {
       uri: lastResult!.uri,
-      sizeKb: info.exists && 'size' in info ? Math.round(info.size / 1024) : 0,
+      sizeKb: fileSizeKb(lastResult!.uri),
       width: lastResult!.width,
       height: lastResult!.height,
     };

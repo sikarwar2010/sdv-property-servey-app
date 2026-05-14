@@ -2,11 +2,11 @@
  * Production-grade GPS capture hook.
  *
  * Workflow:
- *   1. Check permission status; request if undetermined.
- *   2. Open settings link if permanently denied.
- *   3. Capture with `BestForNavigation`; retry up to 3 times if accuracy > 30m.
- *   4. Cancellable on screen unmount.
+ *   1. Request foreground permission; offer settings if denied.
+ *   2. Delegate to `captureBestGpsCoord` (BestForNavigation watch + Android high-accuracy mode).
+ *   3. Cancellable on screen unmount (in-flight result still applied if already resolved).
  */
+import { captureBestGpsCoord } from '@/src/services/gps/capture-best-fix';
 import type { GpsCoord } from '@/src/types';
 import * as Location from 'expo-location';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -22,9 +22,6 @@ interface UseGpsResult {
   capture: () => Promise<GpsCoord | null>;
   reset: () => void;
 }
-
-const ACCURACY_THRESHOLD_M = 30;
-const MAX_ATTEMPTS = 3;
 
 export function useGps(): UseGpsResult {
   const [state, setState] = useState<GpsState>('idle');
@@ -63,45 +60,20 @@ export function useGps(): UseGpsResult {
     }
 
     setState('capturing');
-    let best: GpsCoord | null = null;
-    for (let i = 0; i < MAX_ATTEMPTS; i++) {
+    setAttempts(1);
+    if (cancelled.current) return null;
+    try {
+      const result = await captureBestGpsCoord();
       if (cancelled.current) return null;
-      setAttempts(i + 1);
-      try {
-        const pos = await Location.getCurrentPositionAsync({
-          accuracy: Location.Accuracy.BestForNavigation,
-        });
-        const candidate: GpsCoord = {
-          latitude: pos.coords.latitude,
-          longitude: pos.coords.longitude,
-          accuracyMeters: pos.coords.accuracy ?? 9999,
-          capturedAt: new Date(pos.timestamp).toISOString(),
-        };
-        if (!best || candidate.accuracyMeters < best.accuracyMeters) {
-          best = candidate;
-        }
-        if (candidate.accuracyMeters <= ACCURACY_THRESHOLD_M) {
-          setCoord(candidate);
-          setState('success');
-          return candidate;
-        }
-      } catch (err) {
-        const message = err instanceof Error ? err.message : 'GPS failed';
-        setError(message);
-        setState('error');
-        return null;
-      }
-    }
-
-    // None of the attempts hit the threshold — return our best read.
-    if (best) {
-      setCoord(best);
+      setCoord(result);
       setState('success');
-      return best;
+      return result;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'GPS failed';
+      setError(message);
+      setState('error');
+      return null;
     }
-    setError('Could not get a GPS fix');
-    setState('error');
-    return null;
   }, []);
 
   const reset = useCallback(() => {

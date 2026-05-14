@@ -1,4 +1,4 @@
-import type { Ulb, Ward, DropdownOption } from '@/src/types';
+import type { DropdownOption, Ulb, Ward } from '@/src/types';
 
 export const ulbs: Ulb[] = [
   { code: 'MNP-027', name: 'Mathura Nagar Panchayat' },
@@ -19,52 +19,68 @@ export const assessmentYears: DropdownOption[] = [
   { value: '2023-24', label: '2023-24' },
 ];
 
+/** Main ownership category; when `individual`, use `individualTenancyTypes` for single vs joint. */
 export const ownershipTypes: DropdownOption[] = [
-  { value: 'individual', label: 'Individual (single/joint)' },
+  { value: 'individual', label: 'Individual' },
   { value: 'limited_company', label: 'Limited company' },
-  { value: 'firm_trust', label: 'Firm / trust / society' },
-  { value: 'state_govt', label: 'State government' },
-  { value: 'central_govt', label: 'Central government' },
-  { value: 'local_body', label: 'Local body' },
-  { value: 'religious', label: 'Religious institution' },
-  { value: 'other', label: 'Other' },
+  { value: 'firm_trust_society', label: 'Firm / trust / society' },
+  { value: 'state_government', label: 'State government' },
+  { value: 'central_government', label: 'Central government' },
+  { value: 'municipal_town_panchayat', label: 'Municipal council / town panchayat' },
+  { value: 'lease', label: 'Lease' },
+  { value: 'hfa_awasiy_makaan', label: 'HFA — Awasiy makaan' },
+];
+
+export const individualTenancyTypes: DropdownOption[] = [
+  { value: 'single', label: 'Single' },
+  { value: 'joint', label: 'Joint' },
 ];
 
 export const situations: DropdownOption[] = [
-  { value: 'main_road', label: 'On main road' },
-  { value: 'off_main', label: 'Off main road' },
-  { value: 'lane', label: 'In a lane' },
-  { value: 'cul_de_sac', label: 'Cul-de-sac / dead end' },
+  { value: 'main_market', label: 'Main market' },
+  { value: 'main_road', label: 'Main road' },
+  { value: 'interior', label: 'Interior' },
+  { value: 'slum', label: 'Slum' },
 ];
 
 export const propertyTypes: DropdownOption[] = [
   { value: 'residential', label: 'Residential' },
   { value: 'commercial', label: 'Commercial' },
-  { value: 'mixed', label: 'Mixed use' },
   { value: 'open_land', label: 'Open land' },
   { value: 'religious', label: 'Religious' },
+  { value: 'mix', label: 'Mix' },
 ];
 
 export const propertyUses: DropdownOption[] = [
-  { value: 'self', label: 'Self occupied' },
-  { value: 'rented', label: 'Rented' },
-  { value: 'vacant', label: 'Vacant' },
-  { value: 'partial_rent', label: 'Partially rented' },
+  { value: 'shop', label: 'Shop' },
+  { value: 'bank', label: 'Bank' },
+  { value: 'trust', label: 'Trust' },
+  { value: 'office', label: 'Office' },
 ];
 
 export const roadTypes: DropdownOption[] = [
-  { value: 'kachha', label: 'Kachha (< 4 m)' },
-  { value: 'pakka_narrow', label: 'Pakka narrow (4–8 m)' },
-  { value: 'pakka_wide', label: 'Pakka wide (8+ m)' },
-  { value: 'highway', label: 'Highway' },
+  { value: 'kaccha', label: 'Kaccha' },
+  { value: 'pakka', label: 'Pakka' },
+  { value: 'rcc', label: 'RCC' },
+  { value: 'damar', label: 'Damar' },
 ];
 
 export const taxRateZones: DropdownOption[] = [
-  { value: 'A', label: 'Zone A — premium' },
-  { value: 'B', label: 'Zone B — commercial' },
-  { value: 'C', label: 'Zone C — mixed' },
-  { value: 'D', label: 'Zone D — outer' },
+  { value: 'below_9m', label: 'Below 9 meter' },
+  { value: '9_to_12m', label: '9 to 12 meter' },
+  { value: '12_to_24m', label: '12 to 24 meter' },
+  { value: 'above_24m', label: '24 meter above' },
 ];
+
+/** Full label for review / summaries when individual + single/joint applies. */
+export function formatOwnershipDisplay(ownershipType: string, individualTenancy: string): string {
+  const main = ownershipTypes.find((o) => o.value === ownershipType)?.label ?? ownershipType;
+  if (ownershipType === 'individual' && individualTenancy) {
+    const sub = individualTenancyTypes.find((o) => o.value === individualTenancy)?.label ?? individualTenancy;
+    return `${main} — ${sub}`;
+  }
+  return main;
+}
 
 export const relationships: DropdownOption[] = [
   { value: 'self', label: 'Self' },

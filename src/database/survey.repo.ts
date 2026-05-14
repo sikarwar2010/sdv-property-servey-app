@@ -2,12 +2,13 @@
  * Repository layer between WatermelonDB and the rest of the app.
  * Keeps WMDB query/Q syntax confined to this file.
  */
+import type { DraftSurvey } from '@/src/stores/survey';
+import type { SurveyStatus } from '@/src/types';
+import type { SurveyCreateRequest, SurveyDto } from '@/src/types/api';
+import { makeId } from '@/src/utils/format';
 import { Q } from '@nozbe/watermelondb';
 import { database } from './index';
 import { Floor, Photo, Survey, photoQueries, surveyQueries } from './models';
-import { makeId } from '@/src/utils/format';
-import type { SurveyStatus } from '@/src/types';
-import type { SurveyCreateRequest, SurveyDto } from '@/src/types/api';
 
 const surveys = () => database.get<Survey>('surveys');
 const floors = () => database.get<Floor>('floors');
@@ -97,6 +98,97 @@ export const surveyRepo = {
   async markDirty(id: string): Promise<void> {
     const survey = await surveys().find(id);
     await survey.markPending();
+  },
+
+  /**
+   * Persists the in-memory wizard draft into the local WatermelonDB survey row,
+   * including floors and photos (replaces existing children).
+   */
+  async writeWizardDraft(surveyRowId: string, draft: DraftSurvey): Promise<void> {
+    const survey = await surveys().find(surveyRowId);
+    const [existingFloors, existingPhotos] = await Promise.all([
+      floors().query(Q.where('survey_id', surveyRowId)).fetch(),
+      photos().query(Q.where('survey_id', surveyRowId)).fetch(),
+    ]);
+
+    await database.write(async () => {
+      for (const f of existingFloors) {
+        await f.destroyPermanently();
+      }
+      for (const p of existingPhotos) {
+        await p.destroyPermanently();
+      }
+
+      await survey.update((s) => {
+        s.wizardStep = draft.step;
+        s.propertyNo = draft.propertyNo.trim();
+        s.ulbCode = draft.ulbCode.trim();
+        s.wardNo = draft.wardNo.trim();
+        s.isSlum = draft.isSlum ?? false;
+        s.ownerName = draft.ownerName.trim();
+        s.respondentName = draft.respondentName.trim();
+        s.relationship = draft.relationship;
+        s.mobileNo = draft.mobileNo.trim();
+        s.family = draft.family;
+        s.houseNo = draft.houseNo.trim();
+        s.street = draft.streetName.trim();
+        s.locality = draft.locality.trim();
+        s.city = draft.city.trim();
+        s.pinCode = draft.pinCode.trim();
+        s.assessmentYear = draft.assessmentYear.trim();
+        s.ownershipType = draft.ownershipType;
+        s.propertyType = draft.propertyType;
+        s.propertyUse = draft.propertyUse;
+        s.situation = draft.situation;
+        s.roadType = draft.roadType;
+        s.taxRateZone = draft.taxRateZone;
+        s.plotSqft = draft.plotSqft;
+        s.plinthSqft = draft.plinthSqft;
+        s.waterSource = draft.waterSource;
+        s.sanitationType = draft.sanitation;
+        s.solidWasteType = draft.solidWaste;
+        s.electricityNo = draft.electricityNo.trim();
+        if (draft.gps) {
+          s.gpsLat = draft.gps.latitude;
+          s.gpsLng = draft.gps.longitude;
+          s.gpsAccuracy = draft.gps.accuracyMeters;
+          s.gpsCapturedAt = new Date(draft.gps.capturedAt);
+        } else {
+          s.gpsLat = undefined;
+          s.gpsLng = undefined;
+          s.gpsAccuracy = undefined;
+          s.gpsCapturedAt = undefined;
+        }
+      });
+
+      for (let i = 0; i < draft.floors.length; i++) {
+        const fl = draft.floors[i]!;
+        await floors().create((f) => {
+          f.surveyId = surveyRowId;
+          f.floorName = fl.floorName;
+          f.usageType = fl.usageType;
+          f.constructionType = fl.constructionType;
+          f.isOccupied = fl.isOccupied;
+          f.areaSqft = fl.areaSqft;
+          f.position = i;
+        });
+      }
+
+      const now = new Date();
+      for (const ph of draft.photos) {
+        await photos().create((p) => {
+          p.surveyId = surveyRowId;
+          p.slot = ph.slot;
+          p.localUri = ph.localUri;
+          p.sizeKb = ph.sizeKb;
+          p.width = ph.width ?? 0;
+          p.height = ph.height ?? 0;
+          p.uploadState = 'pending';
+          p.retryCount = 0;
+          p.capturedAt = now;
+        });
+      }
+    });
   },
 
   async markSynced(localId: string, serverId: string): Promise<void> {
@@ -217,7 +309,7 @@ interface FloorInput {
 
 interface PhotoInput {
   surveyId: string;
-  slot: 'front' | 'inside' | 'side' | 'document';
+  slot: 'front' | 'side';
   localUri: string;
   sizeKb: number;
   width: number;

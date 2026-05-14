@@ -6,6 +6,8 @@ import Constants from 'expo-constants';
 
 interface AppEnv {
   apiBaseUrl: string;
+  /** Optional static key for Golang/Gin survey ingest (sent as `X-API-Key`). EAS secret / app.json `extra`. */
+  surveySyncApiKey: string;
   apiTimeoutMs: number;
   syncBatchSize: number;
   uploadConcurrency: number;
@@ -20,6 +22,7 @@ const extra = (Constants.expoConfig?.extra ?? {}) as Partial<AppEnv> & Record<st
 
 export const env: AppEnv = {
   apiBaseUrl: (extra.apiBaseUrl as string) ?? 'https://api.sdvedutech.in/v1',
+  surveySyncApiKey: String(extra.surveySyncApiKey ?? ''),
   apiTimeoutMs: Number(extra.apiTimeoutMs ?? 25_000),
   syncBatchSize: Number(extra.syncBatchSize ?? 25),
   uploadConcurrency: Number(extra.uploadConcurrency ?? 2),

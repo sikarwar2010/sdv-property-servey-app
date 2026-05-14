@@ -7,6 +7,7 @@
  *
  * Use with `react-hook-form` via `zodResolver(stepNSchema)`.
  */
+import { GPS_MAX_ACCURACY_METERS } from '@/src/services/gps/capture-best-fix';
 import { z } from 'zod';
 
 /* ────────────────────────── Primitives ────────────────────────── */
@@ -32,30 +33,55 @@ export type ContextInput = z.infer<typeof contextSchema>;
 /* ────────────────────────── Step 1 — Property ────────────────────────── */
 
 export const step1Schema = z.object({
+  eNagarpalikaId: z.string().trim().max(80).optional().default(''),
+  parcelNo: z.string().trim().max(80).optional().default(''),
   propertyNo: nonEmpty('Property number').max(40, 'Property number is too long'),
+  sectorNumber: z.string().trim().max(40).optional().default(''),
+  constructedYear: z.union([z.literal(''), z.string().regex(/^(19|20)\d{2}$/, 'Enter a valid 4-digit year')]),
   ulbCode: requiredDropdown('ULB'),
   wardNo: requiredDropdown('ward'),
-  isSlum: z.boolean(),
 });
 export type Step1Input = z.infer<typeof step1Schema>;
 
 /* ────────────────────────── Step 2 — Owner ────────────────────────── */
 
-export const step2Schema = z.object({
-  ownerName: nonEmpty('Owner name').max(120),
-  respondentName: nonEmpty('Respondent name').max(120),
-  relationship: requiredDropdown('relationship'),
-  mobileNo: indianMobile,
-  family: z.number().int().min(1, 'Family size must be at least 1').max(50),
-});
+export const step2Schema = z
+  .object({
+    ownerName: nonEmpty('Owner name').max(120),
+    respondentName: nonEmpty('Name of respondent').max(120),
+    relationship: requiredDropdown('relationship'),
+    mobileNo: indianMobile,
+    family: z.number().int().min(1, 'Enter number of family members').max(50),
+    fatherOrHusbandName: nonEmpty('Father / husband name').max(120),
+    alternateMobileNo: z.string().trim().max(10).optional().default(''),
+  })
+  .superRefine((data, ctx) => {
+    const alt = data.alternateMobileNo?.replace(/\D/g, '') ?? '';
+    if (!alt) return;
+    if (!/^[6-9]\d{9}$/.test(alt)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['alternateMobileNo'],
+        message: 'Alternate mobile must be a valid 10-digit Indian number',
+      });
+    }
+    if (alt === data.mobileNo) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['alternateMobileNo'],
+        message: 'Alternate mobile must differ from primary mobile',
+      });
+    }
+  });
 export type Step2Input = z.infer<typeof step2Schema>;
 
 /* ────────────────────────── Step 3 — Address ────────────────────────── */
 
 export const step3Schema = z.object({
   houseNo: nonEmpty('House number').max(40),
-  street: nonEmpty('Street').max(120),
+  streetName: nonEmpty('Street name').max(120),
   locality: z.string().trim().max(120).optional().default(''),
+  colony: z.string().trim().max(120).optional().default(''),
   city: nonEmpty('City').max(80),
   pinCode: indianPin,
 });
@@ -63,14 +89,25 @@ export type Step3Input = z.infer<typeof step3Schema>;
 
 /* ────────────────────────── Step 4 — Taxation ────────────────────────── */
 
-export const step4Schema = z.object({
-  ownershipType: requiredDropdown('ownership type'),
-  propertyType: requiredDropdown('property type'),
-  propertyUse: requiredDropdown('property use'),
-  situation: requiredDropdown('situation'),
-  roadType: requiredDropdown('road type'),
-  taxRateZone: requiredDropdown('tax rate zone'),
-});
+export const step4Schema = z
+  .object({
+    ownershipType: requiredDropdown('ownership type'),
+    individualTenancy: z.string().optional().default(''),
+    propertyType: requiredDropdown('property type'),
+    propertyUse: requiredDropdown('property use'),
+    situation: requiredDropdown('situation'),
+    roadType: requiredDropdown('road type'),
+    taxRateZone: requiredDropdown('tax rate zone'),
+  })
+  .superRefine((data, ctx) => {
+    if (data.ownershipType === 'individual' && !String(data.individualTenancy ?? '').trim()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['individualTenancy'],
+        message: 'Select single or joint for individual ownership',
+      });
+    }
+  });
 export type Step4Input = z.infer<typeof step4Schema>;
 
 /* ────────────────────────── Step 5 — Area + floors ────────────────────────── */
@@ -147,8 +184,12 @@ export const step7Schema = z.object({
       accuracyMeters: z.number().nonnegative(),
       capturedAt: z.string(),
     })
-    .refine((g) => g.accuracyMeters <= 30, {
-      message: 'GPS accuracy is poor (>30 m). Try again in an open area.',
+    .refine((g) => g.accuracyMeters > 0 && Number.isFinite(g.accuracyMeters), {
+      message: 'GPS did not return a valid accuracy radius. Recapture outdoors with a clear sky view.',
+      path: ['accuracyMeters'],
+    })
+    .refine((g) => g.accuracyMeters <= GPS_MAX_ACCURACY_METERS, {
+      message: `Horizontal accuracy must be ±${GPS_MAX_ACCURACY_METERS} m or better (stand beside the property, open sky, wait for the fix).`,
       path: ['accuracyMeters'],
     }),
 });
@@ -158,7 +199,7 @@ export type Step7Input = z.infer<typeof step7Schema>;
 
 export const photoSchema = z.object({
   id: z.string(),
-  slot: z.enum(['front', 'inside', 'side', 'document']),
+  slot: z.enum(['front', 'side']),
   localUri: z.string().url().or(z.string().startsWith('file:')),
   sizeKb: z.number().positive(),
   width: z.number().positive(),
@@ -171,10 +212,6 @@ export const step8Schema = z
   })
   .refine((data) => data.photos.some((p) => p.slot === 'front'), {
     message: 'Front photo is required',
-    path: ['photos'],
-  })
-  .refine((data) => data.photos.some((p) => p.slot === 'inside'), {
-    message: 'Inside photo is required',
     path: ['photos'],
   });
 export type Step8Input = z.infer<typeof step8Schema>;
@@ -191,13 +228,11 @@ export const finalSurveySchema = step1Schema
   .extend({
     floors: z.array(floorSchema).min(1),
     photos: z.array(photoSchema),
+    isSlum: z.boolean().default(false),
   })
   .superRefine((data, ctx) => {
     if (!data.photos.some((p) => p.slot === 'front')) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['photos'], message: 'Front photo is required' });
-    }
-    if (!data.photos.some((p) => p.slot === 'inside')) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['photos'], message: 'Inside photo is required' });
     }
   });
 export type FinalSurveyInput = z.infer<typeof finalSurveySchema>;

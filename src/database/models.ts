@@ -129,7 +129,7 @@ export class Floor extends Model {
 
 /* ────────────────────────── Photo ────────────────────────── */
 
-export type PhotoSlot = 'front' | 'inside' | 'side' | 'document';
+export type PhotoSlot = 'front' | 'side';
 export type UploadState = 'pending' | 'uploading' | 'done' | 'failed';
 
 export class Photo extends Model {

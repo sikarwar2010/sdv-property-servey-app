@@ -1,23 +1,25 @@
-import { useState } from 'react';
-import { Pressable, ScrollView, Text, View } from 'react-native';
-import { useRouter } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
-import { AppButton, AppCard, AppHeader, SectionLabel, Toast } from '@/src/components';
-import { useSurveyStore } from '@/src/stores/survey';
-import { useIsOnline } from '@/src/stores/network';
-import { sqftToSqm, formatMobile } from '@/src/utils/format';
+import { AppButton, AppCard, AppHeader, PropertyPhotosGisNoticeRow, SectionLabel, Toast } from '@/src/components';
 import {
-  ownershipTypes,
+  formatOwnershipDisplay,
   propertyTypes,
   propertyUses,
   relationships,
   roadTypes,
   sanitationTypes,
+  situations,
   solidWasteTypes,
   taxRateZones,
   usageTypes,
   waterSources,
 } from '@/src/mocks/masters';
+import { useIsOnline } from '@/src/stores/network';
+import { useSurveyStore } from '@/src/stores/survey';
+import { formatMobile, isValidMobile, sqftToSqm } from '@/src/utils/format';
+import { surveyDraftToAddressContext } from '@/src/utils/property-geocode';
+import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
+import { useState } from 'react';
+import { Pressable, ScrollView, Text, View } from 'react-native';
 
 const labelFromOptions = (opts: { value: string; label: string }[], v: string) =>
   opts.find((o) => o.value === v)?.label ?? v;
@@ -29,6 +31,8 @@ export default function ReviewScreen() {
   const update = useSurveyStore((s) => s.updateDraft);
   const online = useIsOnline();
   const [toast, setToast] = useState(false);
+  const [toastError, setToastError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
   if (!draft) {
     return (
@@ -39,14 +43,23 @@ export default function ReviewScreen() {
   }
 
   const totalBuiltUp = draft.floors.reduce((acc, f) => acc + f.areaSqft, 0);
-  const requiredPhotos = ['front', 'inside'] as const;
+  const requiredPhotos = ['front'] as const;
   const missingPhotos = requiredPhotos.filter((slot) => !draft.photos.some((p) => p.slot === slot));
+  const alt = draft.alternateMobileNo ?? '';
+  const alternateOk = alt.length === 0 || (alt.length === 10 && isValidMobile(alt) && alt !== draft.mobileNo);
   const canSubmit =
-    draft.propertyNo &&
-    draft.respondentName &&
+    Boolean(draft.wmSurveyId) &&
+    Boolean(draft.propertyNo?.trim()) &&
+    Boolean(draft.respondentName?.trim()) &&
+    Boolean(draft.ownerName?.trim()) &&
+    Boolean(draft.fatherOrHusbandName?.trim()) &&
     draft.mobileNo.length === 10 &&
-    draft.houseNo &&
+    isValidMobile(draft.mobileNo) &&
+    alternateOk &&
+    Boolean(draft.houseNo?.trim()) &&
+    Boolean(draft.streetName?.trim()) &&
     draft.pinCode.length === 6 &&
+    Boolean(draft.city?.trim()) &&
     draft.plotSqft > 0 &&
     draft.gps &&
     missingPhotos.length === 0;
@@ -56,16 +69,36 @@ export default function ReviewScreen() {
     router.back();
   };
 
-  const handleSubmit = () => {
-    submit();
-    setToast(true);
-    setTimeout(() => router.replace('/(app)/dashboard'), 600);
+  const handleSubmit = async () => {
+    if (!canSubmit || submitting) return;
+    setSubmitting(true);
+    setToastError(null);
+    try {
+      await submit();
+      setToast(true);
+      setTimeout(() => router.replace('/(app)/dashboard'), 600);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Could not save or sync';
+      setToastError(msg);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
     <View className="flex-1 bg-page-light dark:bg-page-dark">
-      <AppHeader title="Review & submit" subtitle="Check everything before submitting" />
+      <AppHeader title="Review" subtitle="Check details here; submit sends data to the server when online" />
       <ScrollView contentContainerStyle={{ padding: 14, paddingBottom: 120 }}>
+        {!draft.wmSurveyId ? (
+          <View className="bg-danger-soft border border-danger/30 rounded-xl p-3 mb-3 flex-row items-start">
+            <Ionicons name="alert-circle" size={16} color="#DC2626" />
+            <Text className="flex-1 ml-2 text-caption text-danger-ink">
+              This draft is not linked to local storage. Go back to New survey and tap Continue once to create the
+              record on this device.
+            </Text>
+          </View>
+        ) : null}
+
         {!online ? (
           <View className="bg-warning-soft border border-warning/30 rounded-xl p-3 mb-3 flex-row items-start">
             <Ionicons name="cloud-offline" size={16} color="#92400E" />
@@ -76,32 +109,46 @@ export default function ReviewScreen() {
         ) : null}
 
         <ReviewSection title="Property details" step={1} onEdit={handleEdit}>
+          <RowLine label="E-Nagarpalika Id" value={draft.eNagarpalikaId || '—'} />
+          <RowLine label="Parcel no." value={draft.parcelNo || '—'} />
           <RowLine label="Property no." value={draft.propertyNo || '—'} />
+          <RowLine label="Sector number" value={draft.sectorNumber || '—'} />
+          <RowLine label="Constructed year" value={draft.constructedYear || '—'} />
           <RowLine label="ULB" value={`${draft.ulbName} (${draft.ulbCode})`} />
-          <RowLine label="Ward" value={draft.wardNo} />
-          <RowLine label="In slum?" value={draft.isSlum ? 'Yes' : 'No'} last />
+          <RowLine label="Ward" value={draft.wardNo} last />
         </ReviewSection>
 
-        <ReviewSection title="Owner & family" step={2} onEdit={handleEdit}>
-          <RowLine label="Respondent" value={draft.respondentName || '—'} />
-          <RowLine label="Relationship" value={labelFromOptions(relationships, draft.relationship)} />
-          <RowLine label="Mobile" value={draft.mobileNo ? `+91 ${formatMobile(draft.mobileNo)}` : '—'} />
-          <RowLine label="Family size" value={String(draft.family)} last />
+        <ReviewSection title="Owner details" step={2} onEdit={handleEdit}>
+          <RowLine label="Name of respondent" value={draft.respondentName || '—'} />
+          <RowLine label="Relationship with owner" value={labelFromOptions(relationships, draft.relationship)} />
+          <RowLine label="Family members" value={String(draft.family)} />
+          <RowLine label="Owner name" value={draft.ownerName || '—'} />
+          <RowLine label="Father / husband name" value={draft.fatherOrHusbandName || '—'} />
+          <RowLine label="Mobile no." value={draft.mobileNo ? `+91 ${formatMobile(draft.mobileNo)}` : '—'} />
+          <RowLine
+            label="Alternate mobile"
+            value={draft.alternateMobileNo ? `+91 ${formatMobile(draft.alternateMobileNo)}` : '—'}
+            warn={alt.length > 0 && !alternateOk}
+            last
+          />
         </ReviewSection>
 
         <ReviewSection title="Address" step={3} onEdit={handleEdit}>
-          <RowLine label="House / street" value={[draft.houseNo, draft.streetName].filter(Boolean).join(', ') || '—'} />
+          <RowLine label="House no." value={draft.houseNo || '—'} />
+          <RowLine label="Street name" value={draft.streetName || '—'} />
           <RowLine label="Locality" value={draft.locality || '—'} />
+          <RowLine label="Colony" value={draft.colony || '—'} />
           <RowLine label="City" value={draft.city || '—'} />
           <RowLine label="Pin code" value={draft.pinCode || '—'} last />
         </ReviewSection>
 
         <ReviewSection title="Taxation" step={4} onEdit={handleEdit}>
-          <RowLine label="Tax zone" value={labelFromOptions(taxRateZones, draft.taxRateZone)} />
-          <RowLine label="Ownership" value={labelFromOptions(ownershipTypes, draft.ownership)} />
+          <RowLine label="Tax rate zone" value={labelFromOptions(taxRateZones, draft.taxRateZone)} />
+          <RowLine label="Ownership" value={formatOwnershipDisplay(draft.ownershipType, draft.individualTenancy)} />
           <RowLine label="Property type" value={labelFromOptions(propertyTypes, draft.propertyType)} />
-          <RowLine label="Use" value={labelFromOptions(propertyUses, draft.propertyUse)} />
-          <RowLine label="Road type" value={labelFromOptions(roadTypes, draft.roadType)} last />
+          <RowLine label="Property use" value={labelFromOptions(propertyUses, draft.propertyUse)} />
+          <RowLine label="Road type" value={labelFromOptions(roadTypes, draft.roadType)} />
+          <RowLine label="Situation" value={labelFromOptions(situations, draft.situation)} last />
         </ReviewSection>
 
         <ReviewSection title={`Area & floors (${draft.floors.length})`} step={5} onEdit={handleEdit}>
@@ -137,23 +184,20 @@ export default function ReviewScreen() {
           )}
         </ReviewSection>
 
-        <ReviewSection title={`Photos (${draft.photos.length})`} step={8} onEdit={handleEdit}>
+        <ReviewSection title={`Photos & GIS map (${draft.photos.length})`} step={8} onEdit={handleEdit}>
+          <View className="px-3 pt-3 border-b border-line-subtle">
+            <PropertyPhotosGisNoticeRow
+              photos={draft.photos}
+              capturedGps={draft.gps}
+              addressContext={surveyDraftToAddressContext(draft)}
+            />
+          </View>
           <RowLine
             label="Front"
             value={draft.photos.find((p) => p.slot === 'front') ? '✓ Attached' : 'Missing'}
             warn={!draft.photos.find((p) => p.slot === 'front')}
           />
-          <RowLine
-            label="Inside"
-            value={draft.photos.find((p) => p.slot === 'inside') ? '✓ Attached' : 'Missing'}
-            warn={!draft.photos.find((p) => p.slot === 'inside')}
-          />
-          <RowLine label="Side" value={draft.photos.find((p) => p.slot === 'side') ? '✓ Attached' : 'Optional'} />
-          <RowLine
-            label="Document"
-            value={draft.photos.find((p) => p.slot === 'document') ? '✓ Attached' : 'Optional'}
-            last
-          />
+          <RowLine label="Side" value={draft.photos.find((p) => p.slot === 'side') ? '✓ Attached' : 'Optional'} last />
         </ReviewSection>
 
         {!canSubmit ? (
@@ -173,17 +217,25 @@ export default function ReviewScreen() {
           iconRight={online ? 'checkmark' : 'cloud-upload-outline'}
           size="md"
           className="flex-1"
-          onPress={handleSubmit}
-          disabled={!canSubmit}
+          onPress={() => void handleSubmit()}
+          disabled={!canSubmit || submitting}
+          loading={submitting}
         />
       </View>
 
       <Toast
         visible={toast}
         title={online ? 'Survey submitted' : 'Queued for sync'}
-        message={online ? 'Uploading to server' : 'Will upload when online'}
+        message={online ? 'Saved locally; syncing to server' : 'Saved locally; will sync when online'}
         tone="success"
         onHide={() => setToast(false)}
+      />
+      <Toast
+        visible={Boolean(toastError)}
+        title="Submit failed"
+        message={toastError ?? ''}
+        tone="danger"
+        onHide={() => setToastError(null)}
       />
     </View>
   );
