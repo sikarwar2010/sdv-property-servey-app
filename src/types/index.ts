@@ -9,14 +9,15 @@ export type UserRole =
   | 'operator_admin'
   | 'manager_admin'
   | 'qc_officer'
-  | 'surveyor';
+  | 'surveyor'
+  | 'supervisor'
+  | 'admin';
 
 export interface AuthUser {
   id: string;
   name: string;
-  username: string;
+  email: string;
   role: UserRole;
-  districtId: string;
   districtName: string;
   ulbCode: string;
   ulbName: string;

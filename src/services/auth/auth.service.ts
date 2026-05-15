@@ -19,7 +19,10 @@ export const authService = {
   async logout(): Promise<void> {
     // Fire-and-forget; tokens are cleared regardless of server response.
     try {
-      await api.post('/auth/logout');
+      const deviceId = await getDeviceId();
+      await api.post('/auth/logout', undefined, {
+        headers: { 'x-device-id': deviceId },
+      });
     } catch {
       /* ignore; offline logout is fine */
     } finally {

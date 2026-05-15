@@ -3,11 +3,10 @@ import type { AuthUser, KpiData, NotificationItem, SurveyRecord, SyncQueueItem }
 export const currentUser: AuthUser = {
   id: 'srv-2841',
   name: 'Rajesh Kumar',
-  username: 'rajesh.surveyor',
+  email: 'rajesh.surveyor@sdvedutech.in',
   role: 'surveyor',
-  districtId: 'MAT',
   districtName: 'Mathura',
-  ulbCode: 'MNP-027',
+  ulbCode: 'MTH-NP-001',
   ulbName: 'Mathura Nagar Panchayat',
   wardAssignments: ['12', '14', '18'],
 };

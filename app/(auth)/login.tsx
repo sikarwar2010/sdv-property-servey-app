@@ -1,4 +1,6 @@
 import { AppButton, AppInput } from '@/src/components';
+import { env } from '@/src/config/env';
+import { pingApiHealth } from '@/src/services/api/health';
 import { useAuthStore } from '@/src/stores/auth';
 import { Href, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -8,9 +10,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function LoginScreen() {
   const router = useRouter();
-  const [username, setUsername] = useState('rajesh.surveyor');
-  const [password, setPassword] = useState('demo1234');
+  const [email, setEmail] = useState('rajesh.surveyor@sdvedutech.in');
+  const [password, setPassword] = useState('Admin@12345');
   const [showPassword, setShowPassword] = useState(false);
+  const [apiStatus, setApiStatus] = useState<string | null>(null);
+  const [apiChecking, setApiChecking] = useState(false);
 
   const login = useAuthStore((s) => s.login);
   const isLoading = useAuthStore((s) => s.isLoading);
@@ -39,12 +43,13 @@ export default function LoginScreen() {
           </Text>
 
           <AppInput
-            label="Username"
-            value={username}
-            onChangeText={setUsername}
+            label="Email"
+            value={email}
+            onChangeText={setEmail}
             autoCapitalize="none"
             autoCorrect={false}
-            iconLeft="person-outline"
+            keyboardType="email-address"
+            iconLeft="mail-outline"
             containerClassName="mb-3.5"
           />
 
@@ -72,13 +77,45 @@ export default function LoginScreen() {
           <AppButton
             label={isLoading ? 'Signing in…' : 'Sign in'}
             loading={isLoading}
-            onPress={() => login(username, password)}
+            onPress={() => login(email, password)}
             fullWidth
           />
 
           <Text className="text-caption text-ink-disabled-light text-center mt-6">
             v1.0.0 · For authorized field staff
           </Text>
+          {__DEV__ ? (
+            <>
+              <Text className="text-caption text-ink-disabled-light text-center mt-2" numberOfLines={2}>
+                API: {env.apiBaseUrl}
+              </Text>
+              <View className="mt-3">
+                <AppButton
+                  label={apiChecking ? 'Checking API…' : 'Test API connection'}
+                  variant="outline"
+                  loading={apiChecking}
+                  onPress={async () => {
+                    setApiChecking(true);
+                    const res = await pingApiHealth();
+                    setApiStatus(res.message);
+                    setApiChecking(false);
+                  }}
+                  fullWidth
+                />
+              </View>
+              {apiStatus ? (
+                <Text
+                  className={[
+                    'text-caption text-center mt-2',
+                    apiStatus.startsWith('Connected') ? 'text-green-600' : 'text-red-600',
+                  ].join(' ')}
+                  numberOfLines={4}
+                >
+                  {apiStatus}
+                </Text>
+              ) : null}
+            </>
+          ) : null}
         </ScrollView>
       </KeyboardAvoidingView>
     </View>

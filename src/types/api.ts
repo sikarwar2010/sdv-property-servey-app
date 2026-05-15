@@ -236,8 +236,8 @@ export interface QcRemarkDto {
   createdAt: string;
 }
 
-export interface QcRemarkCreateRequest {
-  surveyId: string;
-  message: string;
+export interface QcDecisionRequest {
+  decision: 'approve' | 'reject';
+  comment?: string;
   taggedSections?: string[];
 }

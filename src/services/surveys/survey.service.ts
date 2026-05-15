@@ -2,7 +2,7 @@ import { api } from '@/src/services/api/client';
 import type {
   MastersBundle,
   Paginated,
-  QcRemarkCreateRequest,
+  QcDecisionRequest,
   QcRemarkDto,
   SurveyCreateRequest,
   SurveyDto,
@@ -66,10 +66,8 @@ export const qcService = {
   list(surveyId: string): Promise<QcRemarkDto[]> {
     return api.get<QcRemarkDto[]>(`/surveys/${surveyId}/qc-remarks`);
   },
-  create(body: QcRemarkCreateRequest): Promise<QcRemarkDto> {
-    return api.post<QcRemarkDto, QcRemarkCreateRequest>(`/surveys/${body.surveyId}/qc-remarks`, body);
-  },
-  resolve(surveyId: string, remarkId: string): Promise<QcRemarkDto> {
-    return api.patch<QcRemarkDto>(`/surveys/${surveyId}/qc-remarks/${remarkId}`, { status: 'resolved' });
+  /** Supervisor/admin: approve or reject a survey (POST /surveys/:id/qc). */
+  decide(surveyId: string, body: QcDecisionRequest): Promise<QcRemarkDto> {
+    return api.post<QcRemarkDto, QcDecisionRequest>(`/surveys/${surveyId}/qc`, body);
   },
 };

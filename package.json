@@ -21,6 +21,8 @@
     "prebuild": "expo prebuild",
     "prebuild:android": "node ./scripts/ensure-android.mjs",
     "dev:android": "expo run:android",
+    "dev:emu": "powershell -ExecutionPolicy Bypass -File ./scripts/start-emulator.ps1",
+    "dev:android:full": "powershell -ExecutionPolicy Bypass -File ./scripts/run-android-dev.ps1",
     "dev:ios": "expo run:ios",
     "web": "expo start --web",
     "lint": "expo lint"

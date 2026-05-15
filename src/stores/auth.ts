@@ -1,85 +1,143 @@
-import { currentUser as mockUser } from '@/src/mocks/surveys';
+import { env } from '@/src/config/env';
+import { HttpError, onAuthFailed } from '@/src/services/api/client';
+import { authService } from '@/src/services/auth/auth.service';
+import { tokenStorage } from '@/src/services/auth/token-storage';
 import type { AuthUser } from '@/src/types';
+import type { AuthUserDto } from '@/src/types/api';
 import * as SecureStore from 'expo-secure-store';
 import { create } from 'zustand';
 
 interface AuthState {
   user: AuthUser | null;
-  accessToken: string | null;
-  refreshToken: string | null;
   hydrated: boolean;
   isLoading: boolean;
   errorMessage: string | null;
   hydrate: () => Promise<void>;
-  login: (username: string, password: string) => Promise<boolean>;
+  login: (email: string, password: string) => Promise<boolean>;
   logout: () => Promise<void>;
+  clearSession: () => Promise<void>;
 }
 
-const STORAGE_KEYS = {
-  user: 'auth-user',
-  accessToken: 'auth-access-token',
-  refreshToken: 'auth-refresh-token',
+const USER_KEY = 'auth.user';
+
+const USER_STORE_OPTIONS: SecureStore.SecureStoreOptions = {
+  keychainAccessible: SecureStore.AFTER_FIRST_UNLOCK,
 };
 
-export const useAuthStore = create<AuthState>((set) => ({
+function dtoToUser(dto: AuthUserDto): AuthUser {
+  return {
+    id: dto.id,
+    name: dto.name,
+    email: dto.email,
+    role: dto.role,
+    districtName: dto.districtName,
+    ulbCode: dto.ulbCode,
+    ulbName: dto.ulbName,
+    wardAssignments: dto.wardAssignments,
+  };
+}
+
+function normalizeEmail(input: string): string {
+  const trimmed = input.trim().toLowerCase();
+  if (trimmed.includes('@')) return trimmed;
+  return `${trimmed}@sdvedutech.in`;
+}
+
+async function persistUser(user: AuthUser): Promise<void> {
+  await SecureStore.setItemAsync(USER_KEY, JSON.stringify(user), USER_STORE_OPTIONS);
+}
+
+async function loadCachedUser(): Promise<AuthUser | null> {
+  const raw = await SecureStore.getItemAsync(USER_KEY, USER_STORE_OPTIONS);
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as AuthUser;
+  } catch {
+    return null;
+  }
+}
+
+export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
-  accessToken: null,
-  refreshToken: null,
   hydrated: false,
   isLoading: false,
   errorMessage: null,
 
+  clearSession: async () => {
+    await Promise.all([tokenStorage.clear(), SecureStore.deleteItemAsync(USER_KEY, USER_STORE_OPTIONS)]);
+    set({ user: null, errorMessage: null });
+  },
+
   hydrate: async () => {
     try {
-      const [userJson, access, refresh] = await Promise.all([
-        SecureStore.getItemAsync(STORAGE_KEYS.user),
-        SecureStore.getItemAsync(STORAGE_KEYS.accessToken),
-        SecureStore.getItemAsync(STORAGE_KEYS.refreshToken),
-      ]);
-      if (userJson && access) {
-        set({
-          user: JSON.parse(userJson) as AuthUser,
-          accessToken: access,
-          refreshToken: refresh,
-        });
+      const tokens = await tokenStorage.load();
+      if (!tokens || tokenStorage.refreshIsExpired(tokens)) {
+        await get().clearSession();
+        return;
       }
+
+      const cached = await loadCachedUser();
+      if (cached) {
+        set({ user: cached });
+        return;
+      }
+
+      const dto = await authService.me();
+      const user = dtoToUser(dto);
+      await persistUser(user);
+      set({ user });
     } catch {
-      // ignore
+      await get().clearSession();
     } finally {
       set({ hydrated: true });
     }
   },
 
-  login: async (username, password) => {
+  login: async (email, password) => {
     set({ isLoading: true, errorMessage: null });
-    // Simulate API latency
-    await new Promise((r) => setTimeout(r, 800));
+    const normalized = normalizeEmail(email);
 
-    if (username.trim() === '' || password.trim() === '') {
-      set({ isLoading: false, errorMessage: 'Please enter both username and password.' });
+    if (!normalized || password.trim() === '') {
+      set({
+        isLoading: false,
+        errorMessage: 'Please enter both email and password.',
+      });
       return false;
     }
 
-    const user = { ...mockUser, username };
-    const accessToken = 'mock-jwt-access-token';
-    const refreshToken = 'mock-jwt-refresh-token';
-
-    await Promise.all([
-      SecureStore.setItemAsync(STORAGE_KEYS.user, JSON.stringify(user)),
-      SecureStore.setItemAsync(STORAGE_KEYS.accessToken, accessToken),
-      SecureStore.setItemAsync(STORAGE_KEYS.refreshToken, refreshToken),
-    ]);
-
-    set({ user, accessToken, refreshToken, isLoading: false, errorMessage: null });
-    return true;
+    try {
+      const { user: dto } = await authService.login(normalized, password);
+      const user = dtoToUser(dto);
+      await persistUser(user);
+      set({ user, isLoading: false, errorMessage: null });
+      return true;
+    } catch (err) {
+      let message = 'Sign in failed. Check your connection and try again.';
+      if (err instanceof HttpError) {
+        if (err.isNetwork || err.isTimeout) {
+          message = `Cannot reach API at ${env.apiBaseUrl}. Start the Go server and use the Android emulator (not Expo Go).`;
+        } else {
+          message = err.message;
+        }
+      } else if (err instanceof Error) {
+        message = err.message;
+      }
+      set({ isLoading: false, errorMessage: message });
+      return false;
+    }
   },
 
   logout: async () => {
-    await Promise.all([
-      SecureStore.deleteItemAsync(STORAGE_KEYS.user),
-      SecureStore.deleteItemAsync(STORAGE_KEYS.accessToken),
-      SecureStore.deleteItemAsync(STORAGE_KEYS.refreshToken),
-    ]);
-    set({ user: null, accessToken: null, refreshToken: null });
+    try {
+      await authService.logout();
+    } catch {
+      /* offline logout is fine */
+    } finally {
+      await get().clearSession();
+    }
   },
 }));
+
+onAuthFailed(() => {
+  void useAuthStore.getState().clearSession();
+});

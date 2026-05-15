@@ -75,6 +75,7 @@
         "expo-build-properties",
         {
           "android": {
+            "usesCleartextTraffic": true,
             "packagingOptions": {
               "pickFirst": [
                 "**/libc++_shared.so"
@@ -90,7 +91,9 @@
     },
     "extra": {
       "apiBaseUrl": "https://api.sdvedutech.in/v1",
-      "surveySyncApiKey": ""
+      "apiBaseUrlDev": "",
+      "surveySyncApiKey": "",
+      "_comment_apiBaseUrlDev": "Physical phone on same Wi‑Fi: set to http://YOUR_PC_LAN_IP:8080/v1 (emulator uses 10.0.2.2 automatically)"
     }
   }
 }
