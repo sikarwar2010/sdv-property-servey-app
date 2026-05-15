@@ -2,39 +2,71 @@ const { withDangerousMod, withMainApplication, withPodfile } = require('@expo/co
 const fs = require('fs/promises');
 const path = require('path');
 
+const WM_IMPORT = 'import com.nozbe.watermelondb.WatermelonDBPackage';
+const WM_ADD = 'add(WatermelonDBPackage())';
+
 /**
  * WatermelonDB needs the iOS simdjson pod; Android needs WatermelonDBPackage on the host when
  * autolinking does not surface WMDatabaseBridge (common with Expo's PackageList template).
+ *
+ * Expo SDK 55+ uses Kotlin MainApplication with:
+ *   PackageList(this).packages.apply { ... }
+ * The injection must match flexible whitespace and must not skip when only an import exists.
  */
+function addWatermelonImport(contents) {
+  if (!contents.includes('import com.facebook.react.PackageList') || contents.includes(WM_IMPORT)) {
+    return contents;
+  }
+  return contents.replace(
+    'import com.facebook.react.PackageList',
+    `import com.facebook.react.PackageList\n${WM_IMPORT}`,
+  );
+}
+
+/** @returns {string} */
+function addWatermelonPackageRegistration(contents) {
+  if (contents.includes(WM_ADD)) {
+    return contents;
+  }
+
+  // Expo / RN Kotlin template: PackageList(this).packages.apply { ... }
+  const kotlinApply = /PackageList\s*\(\s*this\s*\)\s*\.\s*packages\s*\.\s*apply\s*\{\s*\r?\n/;
+  if (kotlinApply.test(contents)) {
+    return contents.replace(kotlinApply, (m) => `${m}          ${WM_ADD}\n`);
+  }
+
+  // Legacy comment anchor (Java or older templates)
+  if (contents.includes('// add(MyReactNativePackage())')) {
+    return contents.replace(
+      '// add(MyReactNativePackage())',
+      `// add(MyReactNativePackage())\n          ${WM_ADD}`,
+    );
+  }
+
+  return contents;
+}
+
 function withWatermelonNative(config) {
   config = withMainApplication(config, (modConfig) => {
     const { modResults } = modConfig;
-    if (!modResults?.contents || modResults.contents.includes('WatermelonDBPackage')) {
+    if (!modResults?.contents) {
       return modConfig;
     }
+
     let contents = modResults.contents;
-    if (!contents.includes('PackageList(this)')) {
+    // Only skip when the package is actually registered, not merely mentioned in a comment.
+    if (contents.includes(WM_ADD)) {
       return modConfig;
     }
 
-    contents = contents.replace(
-      'import com.facebook.react.PackageList',
-      'import com.facebook.react.PackageList\nimport com.nozbe.watermelondb.WatermelonDBPackage',
-    );
-
-    if (contents.includes('// add(MyReactNativePackage())')) {
-      contents = contents.replace(
-        '// add(MyReactNativePackage())',
-        '// add(MyReactNativePackage())\n          add(WatermelonDBPackage())',
-      );
-    } else {
-      contents = contents.replace(
-        /PackageList\(this\)\.packages\.apply\s*\{\s*\n/,
-        'PackageList(this).packages.apply {\n          add(WatermelonDBPackage())\n',
-      );
+    if (!contents.includes('PackageList')) {
+      return modConfig;
     }
 
-    modResults.contents = contents;
+    const next = addWatermelonPackageRegistration(addWatermelonImport(contents));
+    if (next !== contents) {
+      modResults.contents = next;
+    }
     return modConfig;
   });
 

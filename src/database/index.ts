@@ -10,29 +10,50 @@
  * To reset on logout, call `resetDatabase()` — drops and recreates all tables.
  */
 import { Floor, MasterEntry, Photo, Survey, SyncQueueItem } from '@/src/database/models';
+import { assertWatermelonNative } from '@/src/database/native';
 import { schema, SCHEMA_VERSION } from '@/src/database/schema';
 import { Database } from '@nozbe/watermelondb';
 import SQLiteAdapter from '@nozbe/watermelondb/adapters/sqlite';
 
-const adapter = new SQLiteAdapter({
-  schema,
-  // Bump SCHEMA_VERSION + add a migrations object when changing the schema.
-  // migrations: schemaMigrations({ migrations: [] }),
-  dbName: 'propertysurvey',
-  jsi: false,
-  onSetUpError: (error) => {
-    console.error('[db] setup error', error);
+let databaseSingleton: Database | null = null;
+
+function getDatabase(): Database {
+  if (databaseSingleton) return databaseSingleton;
+
+  assertWatermelonNative();
+
+  const adapter = new SQLiteAdapter({
+    schema,
+    // Bump SCHEMA_VERSION + add a migrations object when changing the schema.
+    // migrations: schemaMigrations({ migrations: [] }),
+    dbName: 'propertysurvey',
+    jsi: false,
+    onSetUpError: (error) => {
+      console.error('[db] setup error', error);
+    },
+  });
+
+  databaseSingleton = new Database({
+    adapter,
+    modelClasses: [Survey, Floor, Photo, SyncQueueItem, MasterEntry],
+  });
+
+  return databaseSingleton;
+}
+
+/** Lazy singleton — avoids crashing at import time when the native module is missing. */
+export const database = new Proxy({} as Database, {
+  get(_target, prop) {
+    const db = getDatabase();
+    const value = db[prop as keyof Database];
+    return typeof value === 'function' ? (value as (...args: unknown[]) => unknown).bind(db) : value;
   },
 });
 
-export const database = new Database({
-  adapter,
-  modelClasses: [Survey, Floor, Photo, SyncQueueItem, MasterEntry],
-});
-
 export async function resetDatabase(): Promise<void> {
-  await database.write(async () => {
-    await database.unsafeResetDatabase();
+  const db = getDatabase();
+  await db.write(async () => {
+    await db.unsafeResetDatabase();
   });
 }
 
