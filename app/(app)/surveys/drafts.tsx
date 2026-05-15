@@ -1,4 +1,6 @@
 import { AppButton, AppHeader, EmptyState } from '@/src/components';
+import { surveyRepo } from '@/src/database/survey.repo';
+import { useLocalSurveys } from '@/src/hooks/use-local-surveys';
 import { useSurveyStore } from '@/src/stores/survey';
 import { timeAgo } from '@/src/utils/format';
 import { Ionicons } from '@expo/vector-icons';
@@ -9,18 +11,27 @@ const STEP_NAMES = ['Property details', 'Owner', 'Address', 'Tax', 'Area', 'Serv
 
 export default function DraftsScreen() {
   const router = useRouter();
-  const surveys = useSurveyStore((s) => s.surveys);
+  const { surveys } = useLocalSurveys({ status: 'draft' });
   const startDraft = useSurveyStore((s) => s.startDraft);
+  const loadDraftFromDb = useSurveyStore((s) => s.loadDraftFromDb);
   const drafts = surveys.filter((s) => s.status === 'draft');
 
-  const handleResume = () => {
-    router.push('/(app)/surveys/wizard' as Href);
+  const handleResume = (wmSurveyId: string) => {
+    void loadDraftFromDb(wmSurveyId).then(() => {
+      router.push(`/(app)/surveys/wizard?id=${wmSurveyId}` as Href);
+    });
   };
 
-  const handleDiscard = () => {
-    Alert.alert('Discard draft?', 'This will permanently remove the draft.', [
+  const handleDiscard = (wmSurveyId: string) => {
+    Alert.alert('Discard draft?', 'This will permanently remove the draft from this device.', [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Discard', style: 'destructive' },
+      {
+        text: 'Discard',
+        style: 'destructive',
+        onPress: () => {
+          void surveyRepo.delete(wmSurveyId);
+        },
+      },
     ]);
   };
 
@@ -50,7 +61,7 @@ export default function DraftsScreen() {
           <EmptyState
             icon="document-outline"
             title="No drafts"
-            message="Surveys you save will appear here. They auto-save every 5 seconds."
+            message="Surveys you save in the wizard appear here."
             actionLabel="Start new survey"
             onAction={() => {
               startDraft();
@@ -68,7 +79,7 @@ export default function DraftsScreen() {
                     {item.ownerName || 'Untitled draft'}
                   </Text>
                   <Text className="text-helper text-ink-tertiary-light dark:text-ink-tertiary-dark mt-0.5">
-                    {item.propertyNo} · Ward {item.wardNo}
+                    {item.propertyNo || 'No property no.'} · Ward {item.wardNo}
                   </Text>
                 </View>
                 <View className="bg-warning-soft px-2 py-1 rounded-full">
@@ -104,9 +115,9 @@ export default function DraftsScreen() {
                   iconRight="arrow-forward"
                   size="md"
                   className="flex-1"
-                  onPress={handleResume}
+                  onPress={() => handleResume(item.id)}
                 />
-                <AppButton label="Discard" variant="ghost" size="md" onPress={handleDiscard} />
+                <AppButton label="Discard" variant="ghost" size="md" onPress={() => handleDiscard(item.id)} />
               </View>
             </View>
           );

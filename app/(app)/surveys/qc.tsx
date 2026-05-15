@@ -1,5 +1,5 @@
 import { AppButton, AppHeader, EmptyState } from '@/src/components';
-import { useSurveyStore } from '@/src/stores/survey';
+import { useLocalSurveys } from '@/src/hooks/use-local-surveys';
 import { UserRole } from '@/src/types';
 import { timeAgo } from '@/src/utils/format';
 import { Ionicons } from '@expo/vector-icons';
@@ -21,7 +21,7 @@ const SECTION_LABELS: Record<string, string> = {
 export default function QcScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ id?: string }>();
-  const surveys = useSurveyStore((s) => s.surveys);
+  const { surveys } = useLocalSurveys();
   const [reply, setReply] = useState('');
 
   const survey = surveys.find((s) => s.id === params.id) ?? surveys.find((s) => s.qcRemarks?.length);

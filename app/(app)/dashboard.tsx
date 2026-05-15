@@ -1,4 +1,5 @@
 import { AppButton, AppCard, KpiCard, OfflineBanner, PulseDot } from '@/src/components';
+import { useSurveyKpi } from '@/src/hooks/use-survey-kpi';
 import { useAuthStore } from '@/src/stores/auth';
 import { useIsOnline } from '@/src/stores/network';
 import { useSurveyStore } from '@/src/stores/survey';
@@ -13,7 +14,7 @@ export default function DashboardScreen() {
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
   const startDraft = useSurveyStore((s) => s.startDraft);
-  const kpi = useSurveyStore((s) => s.kpi);
+  const kpi = useSurveyKpi();
   const notifications = useSurveyStore((s) => s.notifications);
   const online = useIsOnline();
   const unread = notifications.filter((n) => !n.read).length;

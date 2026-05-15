@@ -1,14 +1,43 @@
 import { AppButton, AppCard, AppHeader, Banner, EmptyState, ListRow, StatusBadge, Tag } from '@/src/components';
-import { useSurveyStore } from '@/src/stores/survey';
+import { surveyRowToRecord } from '@/src/database/survey-mapper';
+import { useSurveyObservable } from '@/src/hooks/use-database';
+import type { SurveyRecord } from '@/src/types';
 import { formatDate, formatMobile, formatTime, sqftToSqm } from '@/src/utils/format';
 import { Href, useLocalSearchParams, useRouter } from 'expo-router';
+import { useEffect, useState } from 'react';
 import { ScrollView, Text, View } from 'react-native';
 
 export default function SurveyDetailScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ id?: string }>();
-  const surveys = useSurveyStore((s) => s.surveys);
-  const survey = surveys.find((s) => s.id === params.id);
+  const wmId = params.id;
+  const { survey: wmSurvey, loading } = useSurveyObservable(wmId);
+  const [survey, setSurvey] = useState<SurveyRecord | null>(null);
+
+  useEffect(() => {
+    if (!wmSurvey) {
+      setSurvey(null);
+      return;
+    }
+    let cancelled = false;
+    void surveyRowToRecord(wmSurvey).then((record) => {
+      if (!cancelled) setSurvey(record);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [wmSurvey]);
+
+  if (loading) {
+    return (
+      <View className="flex-1 bg-page-light dark:bg-page-dark">
+        <AppHeader title="Survey" />
+        <View className="flex-1 items-center justify-center">
+          <Text className="text-body text-ink-secondary-light">Loading…</Text>
+        </View>
+      </View>
+    );
+  }
 
   if (!survey) {
     return (
@@ -183,7 +212,7 @@ export default function SurveyDetailScreen() {
           <AppButton
             label="Edit and resubmit"
             iconRight="arrow-forward"
-            onPress={() => router.push('/(app)/surveys/wizard' as Href)}
+            onPress={() => router.push(`/(app)/surveys/wizard?id=${survey.id}` as Href)}
             fullWidth
             className="mt-2"
           />

@@ -1,6 +1,6 @@
 import { AppHeader, Avatar, SegmentedControl, StatusBadge } from '@/src/components';
+import { useLocalSurveys } from '@/src/hooks/use-local-surveys';
 import { useAuthStore } from '@/src/stores/auth';
-import { useSurveyStore } from '@/src/stores/survey';
 import type { SurveyStatus } from '@/src/types';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, type Href } from 'expo-router';
@@ -19,7 +19,7 @@ const POSITIONS: Record<string, { x: number; y: number }> = {
 
 export default function MapScreen() {
   const router = useRouter();
-  const surveys = useSurveyStore((s) => s.surveys);
+  const { surveys } = useLocalSurveys();
   const user = useAuthStore((s) => s.user);
   const [filter, setFilter] = useState<Filter>('all');
   const [selectedId, setSelectedId] = useState<string | null>(null);

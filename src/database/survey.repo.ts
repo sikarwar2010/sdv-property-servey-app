@@ -2,6 +2,7 @@
  * Repository layer between WatermelonDB and the rest of the app.
  * Keeps WMDB query/Q syntax confined to this file.
  */
+import { wmToDraft } from '@/src/database/survey-mapper';
 import type { DraftSurvey } from '@/src/stores/survey';
 import type { SurveyStatus } from '@/src/types';
 import type { SurveyCreateRequest, SurveyDto } from '@/src/types/api';
@@ -18,7 +19,7 @@ export const surveyRepo = {
   /** Reactive observable for live list rendering. */
   observeAll(filter?: { status?: SurveyStatus; q?: string }) {
     const conditions = [];
-    if (filter?.status && filter.status !== 'draft') {
+    if (filter?.status) {
       conditions.push(Q.where('status', filter.status));
     }
     if (filter?.q) {
@@ -104,6 +105,16 @@ export const surveyRepo = {
    * Persists the in-memory wizard draft into the local WatermelonDB survey row,
    * including floors and photos (replaces existing children).
    */
+  /** Load a persisted wizard draft from WatermelonDB (survey row + floors + photos). */
+  async readWizardDraft(surveyRowId: string): Promise<DraftSurvey> {
+    const survey = await surveys().find(surveyRowId);
+    const [floorRows, photoRows] = await Promise.all([
+      floors().query(Q.where('survey_id', surveyRowId), Q.sortBy('position', Q.asc)).fetch(),
+      photos().query(Q.where('survey_id', surveyRowId)).fetch(),
+    ]);
+    return wmToDraft(survey, floorRows, photoRows);
+  },
+
   async writeWizardDraft(surveyRowId: string, draft: DraftSurvey): Promise<void> {
     const survey = await surveys().find(surveyRowId);
     const [existingFloors, existingPhotos] = await Promise.all([

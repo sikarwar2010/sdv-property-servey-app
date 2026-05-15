@@ -1,4 +1,5 @@
 import { EmptyState, OfflineBanner, SearchBar, SurveyCard } from '@/src/components';
+import { useLocalSurveys } from '@/src/hooks/use-local-surveys';
 import { useSurveyStore } from '@/src/stores/survey';
 import type { SurveyStatus } from '@/src/types/index';
 import { Ionicons } from '@expo/vector-icons';
@@ -19,7 +20,8 @@ const FILTERS: ReadonlyArray<{ value: Filter; label: string }> = [
 
 export default function SurveysListScreen() {
   const router = useRouter();
-  const surveys = useSurveyStore((s) => s.surveys);
+  const { surveys } = useLocalSurveys();
+  const loadDraftFromDb = useSurveyStore((s) => s.loadDraftFromDb);
   const startDraft = useSurveyStore((s) => s.startDraft);
   const [filter, setFilter] = useState<Filter>('all');
   const [query, setQuery] = useState('');
@@ -48,7 +50,9 @@ export default function SurveysListScreen() {
     if (status === 'failed') {
       router.push(`/(app)/surveys/qc?id=${id}` as Href);
     } else if (status === 'draft') {
-      router.push('/(app)/surveys/wizard' as Href);
+      void loadDraftFromDb(id).then(() => {
+        router.push(`/(app)/surveys/wizard?id=${id}` as Href);
+      });
     } else {
       router.push(`/(app)/surveys/${id}` as Href);
     }

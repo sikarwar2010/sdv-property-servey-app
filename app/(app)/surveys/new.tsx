@@ -44,7 +44,10 @@ export default function NewSurveyScreen() {
       if (!live?.wmSurveyId) return;
       await surveyRepo.writeWizardDraft(live.wmSurveyId, { ...live, step: 1 });
       update({ step: 1 });
-      router.push('/(app)/surveys/wizard' as Href);
+      router.push(`/(app)/surveys/wizard?id=${live.wmSurveyId}` as Href);
+    } catch (e) {
+      const message = e instanceof Error ? e.message : 'Could not create local survey record';
+      Alert.alert('Save failed', message);
     } finally {
       setBusy(false);
     }

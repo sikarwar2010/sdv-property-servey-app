@@ -34,7 +34,7 @@ import type { FloorData, PhotoRef } from '@/src/types';
 import { isValidMobile, isValidPin, sqftToSqmDetailed } from '@/src/utils/format';
 import { surveyDraftToAddressContext } from '@/src/utils/property-geocode';
 import { Ionicons } from '@expo/vector-icons';
-import { Href, useRouter } from 'expo-router';
+import { Href, useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -52,13 +52,42 @@ const STEP_TITLES = [
 
 export default function WizardScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ id?: string }>();
   const draft = useSurveyStore((s) => s.draft);
   const update = useSurveyStore((s) => s.updateDraft);
   const save = useSurveyStore((s) => s.saveDraft);
   const cancel = useSurveyStore((s) => s.cancelDraft);
+  const loadDraftFromDb = useSurveyStore((s) => s.loadDraftFromDb);
 
   const [toastVisible, setToastVisible] = useState(false);
+  const [toastError, setToastError] = useState<string | null>(null);
+  const [loadingDraft, setLoadingDraft] = useState(Boolean(params.id));
   const insets = useSafeAreaInsets();
+
+  useEffect(() => {
+    const wmId = params.id;
+    if (!wmId) return;
+    let cancelled = false;
+    setLoadingDraft(true);
+    void loadDraftFromDb(wmId)
+      .catch(() => {
+        if (!cancelled) setToastError('Could not load saved draft');
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingDraft(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [params.id, loadDraftFromDb]);
+
+  if (loadingDraft) {
+    return (
+      <View className="flex-1 items-center justify-center bg-page-light dark:bg-page-dark">
+        <Text className="text-body text-ink-secondary-light">Loading draft…</Text>
+      </View>
+    );
+  }
 
   if (!draft) {
     return (
@@ -85,8 +114,17 @@ export default function WizardScreen() {
   };
 
   const handleSave = async () => {
-    await save();
-    setToastVisible(true);
+    setToastError(null);
+    const result = await save();
+    if (result.ok) {
+      setToastVisible(true);
+      return;
+    }
+    const message =
+      result.reason === 'not_signed_in'
+        ? (result.message ?? 'Sign in to save on this device')
+        : (result.message ?? 'Could not save draft');
+    setToastError(message);
   };
 
   const handleCancel = () => {
@@ -172,9 +210,16 @@ export default function WizardScreen() {
       <Toast
         visible={toastVisible}
         title="Draft saved"
-        message="Auto-syncs when online"
+        message="Saved on this device"
         tone="success"
         onHide={() => setToastVisible(false)}
+      />
+      <Toast
+        visible={Boolean(toastError)}
+        title="Save failed"
+        message={toastError ?? ''}
+        tone="danger"
+        onHide={() => setToastError(null)}
       />
     </View>
   );

@@ -1,5 +1,3 @@
-import { useState } from 'react';
-import { ScrollView, Text, View } from 'react-native';
 import {
   AppCard,
   AppHeader,
@@ -11,7 +9,9 @@ import {
   Tabs,
   Tag,
 } from '@/src/components';
-import { useSurveyStore } from '@/src/stores/survey';
+import { useSurveyKpi } from '@/src/hooks/use-survey-kpi';
+import { useState } from 'react';
+import { ScrollView, Text, View } from 'react-native';
 
 type Range = 'today' | 'week' | 'month';
 
@@ -35,7 +35,7 @@ const HOURLY_BARS = [
 export default function ReportsScreen() {
   const [range, setRange] = useState<Range>('today');
   const [tab, setTab] = useState('overview');
-  const kpi = useSurveyStore((s) => s.kpi);
+  const kpi = useSurveyKpi();
 
   const target = range === 'today' ? 10 : range === 'week' ? 50 : 200;
   const achieved = range === 'today' ? kpi.today : range === 'week' ? 47 : 142;

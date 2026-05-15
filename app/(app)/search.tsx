@@ -1,5 +1,5 @@
 import { EmptyState, SearchBar, StatusBadge, Tag } from '@/src/components';
-import { useSurveyStore } from '@/src/stores/survey';
+import { useLocalSurveys } from '@/src/hooks/use-local-surveys';
 import { Ionicons } from '@expo/vector-icons';
 import { Href, useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
@@ -15,7 +15,7 @@ const SUGGESTIONS = [
 
 export default function SearchScreen() {
   const router = useRouter();
-  const surveys = useSurveyStore((s) => s.surveys);
+  const { surveys } = useLocalSurveys();
   const [query, setQuery] = useState('');
 
   const results = useMemo(() => {

@@ -1,7 +1,8 @@
 import { surveyRepo } from '@/src/database/survey.repo';
-import { kpiData as initialKpi, mockNotifications, mockSurveys, mockSyncQueue } from '@/src/mocks/surveys';
+import { mockNotifications, mockSyncQueue } from '@/src/mocks/surveys';
+import { useAuthStore } from '@/src/stores/auth';
 import { syncEngine } from '@/src/sync/sync-engine';
-import type { FloorData, GpsCoord, NotificationItem, PhotoRef, SurveyRecord, SyncQueueItem } from '@/src/types';
+import type { FloorData, GpsCoord, NotificationItem, PhotoRef, SyncQueueItem } from '@/src/types';
 import { makeId } from '@/src/utils/format';
 import { create } from 'zustand';
 
@@ -105,18 +106,21 @@ const emptyDraft = (): DraftSurvey => ({
   photos: [],
 });
 
+export type SaveDraftResult =
+  | { ok: true }
+  | { ok: false; reason: 'no_draft' | 'not_signed_in' | 'db_error'; message?: string };
+
 interface SurveyState {
-  surveys: SurveyRecord[];
   notifications: NotificationItem[];
   syncQueue: SyncQueueItem[];
   draft: DraftSurvey | null;
-  kpi: typeof initialKpi;
   startDraft: () => void;
+  loadDraftFromDb: (wmSurveyId: string) => Promise<void>;
   updateDraft: (patch: Partial<DraftSurvey>) => void;
   addFloor: (floor: Omit<FloorData, 'id'>) => void;
   updateFloor: (id: string, patch: Partial<FloorData>) => void;
   removeFloor: (id: string) => void;
-  saveDraft: () => void | Promise<void>;
+  saveDraft: () => Promise<SaveDraftResult>;
   cancelDraft: () => void;
   submitSurvey: () => Promise<void>;
   markNotificationRead: (id: string) => void;
@@ -124,13 +128,16 @@ interface SurveyState {
 }
 
 export const useSurveyStore = create<SurveyState>((set, get) => ({
-  surveys: mockSurveys,
   notifications: mockNotifications,
   syncQueue: mockSyncQueue,
   draft: null,
-  kpi: initialKpi,
 
   startDraft: () => set({ draft: emptyDraft() }),
+
+  loadDraftFromDb: async (wmSurveyId) => {
+    const draft = await surveyRepo.readWizardDraft(wmSurveyId);
+    set({ draft });
+  },
 
   updateDraft: (patch) => set((state) => ({ draft: state.draft ? { ...state.draft, ...patch } : null })),
 
@@ -161,66 +168,45 @@ export const useSurveyStore = create<SurveyState>((set, get) => ({
     }),
 
   saveDraft: async () => {
-    const { draft } = get();
-    if (!draft?.wmSurveyId) {
-      // eslint-disable-next-line no-console
-      console.log('[draft saved] no Watermelon row yet — continue from New survey first');
-      return;
+    let draft = get().draft;
+    if (!draft) return { ok: false, reason: 'no_draft' };
+
+    try {
+      if (!draft.wmSurveyId) {
+        const user = useAuthStore.getState().user;
+        if (!user) {
+          return { ok: false, reason: 'not_signed_in', message: 'Sign in to save this survey on device.' };
+        }
+        const row = await surveyRepo.createDraft(user.id);
+        set({ draft: { ...draft, wmSurveyId: row.id, id: row.localId } });
+        draft = get().draft!;
+      }
+
+      await surveyRepo.writeWizardDraft(draft.wmSurveyId!, draft);
+      return { ok: true };
+    } catch (e) {
+      const message = e instanceof Error ? e.message : 'Could not save draft';
+      return { ok: false, reason: 'db_error', message };
     }
-    await surveyRepo.writeWizardDraft(draft.wmSurveyId, draft);
   },
 
   cancelDraft: () => set({ draft: null }),
 
   submitSurvey: async () => {
-    const { draft, surveys, kpi } = get();
-    if (!draft || !draft.wmSurveyId) return;
+    const saveResult = await get().saveDraft();
+    if (!saveResult.ok) {
+      throw new Error(saveResult.message ?? 'Could not save survey locally');
+    }
+
+    const draft = get().draft;
+    if (!draft?.wmSurveyId) {
+      throw new Error('Survey is not linked to local storage');
+    }
 
     await surveyRepo.writeWizardDraft(draft.wmSurveyId, draft);
     await surveyRepo.markDirty(draft.wmSurveyId);
     void syncEngine.run();
-
-    const now = new Date().toISOString();
-    const builtUp = draft.floors.reduce((acc, f) => acc + f.areaSqft, 0);
-    const newSurvey: SurveyRecord = {
-      id: makeId('s'),
-      localId: draft.id,
-      status: 'pending',
-      ownerName: draft.ownerName.trim() || draft.respondentName.trim() || 'Untitled',
-      respondentName: draft.respondentName,
-      relationship: draft.relationship,
-      fatherOrHusbandName: draft.fatherOrHusbandName,
-      alternateMobileNo: draft.alternateMobileNo,
-      propertyNo:
-        draft.propertyNo ||
-        `PR-${draft.wardNo}-${Math.floor(Math.random() * 10000)
-          .toString()
-          .padStart(5, '0')}`,
-      ulbCode: draft.ulbCode,
-      ulbName: draft.ulbName,
-      wardNo: draft.wardNo,
-      addressLine: [draft.houseNo, draft.streetName, draft.locality, draft.colony, draft.city, draft.pinCode]
-        .map((s) => String(s).trim())
-        .filter(Boolean)
-        .join(', '),
-      mobileNo: draft.mobileNo,
-      family: draft.family,
-      plotSqft: draft.plotSqft,
-      plinthSqft: draft.plinthSqft,
-      builtUpSqft: builtUp,
-      floors: draft.floors,
-      gps: draft.gps ?? undefined,
-      photos: draft.photos,
-      createdAt: now,
-      updatedAt: now,
-      step: 8,
-      totalSteps: 8,
-    };
-    set({
-      surveys: [newSurvey, ...surveys],
-      draft: null,
-      kpi: { ...kpi, total: kpi.total + 1, today: kpi.today + 1, pending: kpi.pending + 1 },
-    });
+    set({ draft: null });
   },
 
   markNotificationRead: (id) =>

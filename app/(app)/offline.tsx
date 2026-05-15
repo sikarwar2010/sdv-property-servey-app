@@ -1,4 +1,5 @@
 import { AppButton, AppCard, AppHeader, SectionLabel } from '@/src/components';
+import { useLocalSurveys } from '@/src/hooks/use-local-surveys';
 import { useIsOnline, useNetworkStore } from '@/src/stores/network';
 import { useSurveyStore } from '@/src/stores/survey';
 import { timeAgo } from '@/src/utils/format';
@@ -9,7 +10,7 @@ export default function OfflineScreen() {
   const online = useIsOnline();
   const lastSyncAt = useNetworkStore((s) => s.lastSyncAt);
   const queue = useSurveyStore((s) => s.syncQueue);
-  const surveys = useSurveyStore((s) => s.surveys);
+  const { surveys } = useLocalSurveys();
   const drafts = surveys.filter((s) => s.status === 'draft');
 
   return (
