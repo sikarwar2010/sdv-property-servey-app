@@ -1,5 +1,5 @@
 /**
- * Sync engine — owns the push → pull cycle.
+ * Sync engine — owns the push → pull cycle (Go API).
  *
  * Triggers:
  *   1. Manual: Sync screen "Sync now" button
@@ -15,11 +15,11 @@
  *     sync metadata first; photos catch up async.
  */
 import { env } from '@/src/config/env';
-import type { Survey } from '@/src/database/models';
+import type { StoredFloor, StoredPhoto, StoredSurvey } from '@/src/database/local-types';
 import { surveyRepo } from '@/src/database/survey.repo';
 import { HttpError } from '@/src/services/api/client';
 import { syncService } from '@/src/services/sync/sync.service';
-import { useAuthStore } from '@/src/stores/auth';
+import { getAuthSessionUser } from '@/src/stores/auth-session';
 import { useSyncStore } from '@/src/stores/sync';
 import { uploadQueue } from '@/src/sync/upload-queue';
 import type { SurveyUpdateRequest, SyncPullRequest, SyncPushRequest } from '@/src/types/api';
@@ -70,7 +70,6 @@ async function doCycle(): Promise<SyncResult> {
     error = err instanceof Error ? err.message : 'sync_failed';
     store.setCycleState('failed', error);
   } finally {
-    // Photos always get a chance after a sync cycle.
     void uploadQueue.run();
   }
 
@@ -78,13 +77,12 @@ async function doCycle(): Promise<SyncResult> {
 }
 
 async function pushDirty(): Promise<number> {
-  const batch: Survey[] = await surveyRepo.dirty(env.syncBatchSize);
+  const batch: StoredSurvey[] = await surveyRepo.dirty(env.syncBatchSize);
   if (batch.length === 0) return 0;
 
-  // Mark in-flight rows so the UI shows "syncing".
-  await Promise.all(batch.map((s) => s.markSyncing()));
+  await surveyRepo.markBatchSyncing(batch.map((s) => s.id));
 
-  const requestSurveys: SurveyUpdateRequest[] = await Promise.all(batch.map(async (s) => toUpdateRequest(s)));
+  const requestSurveys: SurveyUpdateRequest[] = await Promise.all(batch.map((s) => toUpdateRequest(s)));
 
   const body: SyncPushRequest = {
     surveys: requestSurveys,
@@ -98,14 +96,13 @@ async function pushDirty(): Promise<number> {
     return res.accepted.length;
   } catch (err) {
     const message = err instanceof HttpError ? `${err.code}: ${err.message}` : 'network_error';
-    // All-or-nothing failure: mark every row for retry.
     await Promise.all(batch.map((s) => surveyRepo.markFailed(s.localId, message)));
     throw err;
   }
 }
 
 async function pullDelta(): Promise<number> {
-  const auth = useAuthStore.getState().user;
+  const auth = getAuthSessionUser();
   if (!auth) return 0;
   const lastSyncedAt = useSyncStore.getState().lastSyncAt;
   const body: SyncPullRequest = {
@@ -119,8 +116,9 @@ async function pullDelta(): Promise<number> {
   return res.surveys.length;
 }
 
-async function toUpdateRequest(s: Survey): Promise<SurveyUpdateRequest> {
-  const [floors, photos] = await Promise.all([s.floors.fetch(), s.photos.fetch()]);
+function toUpdateRequest(s: StoredSurvey): SurveyUpdateRequest {
+  const floors = [...s.floors].sort((a, b) => a.position - b.position);
+  const photos = s.photos;
   return {
     localId: s.localId,
     propertyNo: s.propertyNo,
@@ -146,7 +144,7 @@ async function toUpdateRequest(s: Survey): Promise<SurveyUpdateRequest> {
     taxRateZone: s.taxRateZone,
     plotSqft: s.plotSqft,
     plinthSqft: s.plinthSqft,
-    floors: floors.map((f, i) => ({
+    floors: floors.map((f: StoredFloor) => ({
       id: f.id,
       floorName: f.floorName,
       usageType: f.usageType,
@@ -164,19 +162,19 @@ async function toUpdateRequest(s: Survey): Promise<SurveyUpdateRequest> {
             latitude: s.gpsLat,
             longitude: s.gpsLng,
             accuracyMeters: s.gpsAccuracy ?? 0,
-            capturedAt: (s.gpsCapturedAt ?? new Date()).toISOString(),
+            capturedAt: s.gpsCapturedAt ?? new Date().toISOString(),
           }
         : null,
     photos: photos
-      .filter((p) => p.serverKey)
-      .map((p) => ({
+      .filter((p: StoredPhoto) => p.serverKey)
+      .map((p: StoredPhoto) => ({
         id: p.id,
         slot: p.slot,
-        serverKey: p.serverKey,
+        serverKey: p.serverKey!,
         sizeKb: p.sizeKb,
         width: p.width,
         height: p.height,
-        capturedAt: p.capturedAt.toISOString(),
+        capturedAt: p.capturedAt,
       })),
     status: s.status,
   };

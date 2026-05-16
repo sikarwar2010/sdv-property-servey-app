@@ -1,14 +1,14 @@
 import { surveyRepo } from '@/src/database/survey.repo';
-import { mockNotifications, mockSyncQueue } from '@/src/mocks/surveys';
+import { mockNotifications } from '@/src/mocks/surveys';
+import { saveAndSubmitSurvey, type SubmitOutcome } from '@/src/services/survey-submit';
 import { useAuthStore } from '@/src/stores/auth';
-import { syncEngine } from '@/src/sync/sync-engine';
-import type { FloorData, GpsCoord, NotificationItem, PhotoRef, SyncQueueItem } from '@/src/types';
+import type { FloorData, GpsCoord, NotificationItem, PhotoRef } from '@/src/types';
 import { makeId } from '@/src/utils/format';
 import { create } from 'zustand';
 
 interface DraftSurvey {
   id: string;
-  /** WatermelonDB `surveys.id` for this draft; set when starting from New survey. */
+  /** Local persisted survey row id (`StoredSurvey.id`); set when starting from New survey. */
   wmSurveyId?: string;
   step: number;
   // Step 1 — Property details
@@ -112,7 +112,6 @@ export type SaveDraftResult =
 
 interface SurveyState {
   notifications: NotificationItem[];
-  syncQueue: SyncQueueItem[];
   draft: DraftSurvey | null;
   startDraft: () => void;
   loadDraftFromDb: (wmSurveyId: string) => Promise<void>;
@@ -122,17 +121,25 @@ interface SurveyState {
   removeFloor: (id: string) => void;
   saveDraft: () => Promise<SaveDraftResult>;
   cancelDraft: () => void;
-  submitSurvey: () => Promise<void>;
+  submitSurvey: () => Promise<SubmitOutcome>;
   markNotificationRead: (id: string) => void;
   markAllNotificationsRead: () => void;
 }
 
 export const useSurveyStore = create<SurveyState>((set, get) => ({
   notifications: mockNotifications,
-  syncQueue: mockSyncQueue,
   draft: null,
 
-  startDraft: () => set({ draft: emptyDraft() }),
+  startDraft: () => {
+    set({ draft: emptyDraft() });
+    const user = useAuthStore.getState().user;
+    if (!user) return;
+    void surveyRepo.createDraft(user.id).then((row) => {
+      const current = get().draft;
+      if (!current) return;
+      set({ draft: { ...current, wmSurveyId: row.id, id: row.localId } });
+    });
+  },
 
   loadDraftFromDb: async (wmSurveyId) => {
     const draft = await surveyRepo.readWizardDraft(wmSurveyId);
@@ -195,18 +202,19 @@ export const useSurveyStore = create<SurveyState>((set, get) => ({
   submitSurvey: async () => {
     const saveResult = await get().saveDraft();
     if (!saveResult.ok) {
-      throw new Error(saveResult.message ?? 'Could not save survey locally');
+      return { ok: false, message: saveResult.message ?? 'Could not save survey on device' };
     }
 
     const draft = get().draft;
-    if (!draft?.wmSurveyId) {
-      throw new Error('Survey is not linked to local storage');
+    if (!draft) {
+      return { ok: false, message: 'No survey draft' };
     }
 
-    await surveyRepo.writeWizardDraft(draft.wmSurveyId, draft);
-    await surveyRepo.markDirty(draft.wmSurveyId);
-    void syncEngine.run();
-    set({ draft: null });
+    const outcome = await saveAndSubmitSurvey(draft);
+    if (outcome.ok) {
+      set({ draft: null });
+    }
+    return outcome;
   },
 
   markNotificationRead: (id) =>
@@ -219,3 +227,4 @@ export const useSurveyStore = create<SurveyState>((set, get) => ({
 }));
 
 export type { DraftSurvey };
+

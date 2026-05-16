@@ -5,22 +5,22 @@
  *   1. Permission check (camera or media library).
  *   2. Launch picker.
  *   3. Compress via uploadService.compress (≤ 200 KB JPEG, 1600px max).
- *   4. Insert Photo row in WatermelonDB with `upload_state = 'pending'`.
+ *   4. Append photo to the local survey with `upload_state = 'pending'`.
  *   5. Kick the upload queue (it will batch and retry independently).
  */
-import { useState } from 'react';
-import { Alert, Linking, Platform } from 'react-native';
-import * as ImagePicker from 'expo-image-picker';
 import { uploadService } from '@/src/services/uploads/upload.service';
 import { photoRepo } from '@/src/database/survey.repo';
 import { uploadQueue } from '@/src/sync/upload-queue';
-import type { Photo, PhotoSlot } from '@/src/database/models';
+import type { PhotoSlot, StoredPhoto } from '@/src/database/local-types';
+import { useState } from 'react';
+import { Alert, Linking, Platform } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 
 interface UsePhotoCaptureResult {
   busy: boolean;
   error: string | null;
-  captureFromCamera: (surveyId: string, slot: PhotoSlot) => Promise<Photo | null>;
-  pickFromGallery: (surveyId: string, slot: PhotoSlot) => Promise<Photo | null>;
+  captureFromCamera: (surveyId: string, slot: PhotoSlot) => Promise<StoredPhoto | null>;
+  pickFromGallery: (surveyId: string, slot: PhotoSlot) => Promise<StoredPhoto | null>;
 }
 
 export function usePhotoCapture(): UsePhotoCaptureResult {
@@ -31,7 +31,7 @@ export function usePhotoCapture(): UsePhotoCaptureResult {
     surveyId: string,
     slot: PhotoSlot,
     result: ImagePicker.ImagePickerResult,
-  ): Promise<Photo | null> => {
+  ): Promise<StoredPhoto | null> => {
     if (result.canceled || !result.assets[0]) return null;
     const asset = result.assets[0];
     setBusy(true);

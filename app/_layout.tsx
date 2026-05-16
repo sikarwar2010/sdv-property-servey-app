@@ -1,10 +1,12 @@
+import { AppProviders } from '@/src/providers/AppProviders';
 import { useAuthStore } from '@/src/stores/auth';
 import { useNetworkSubscriber } from '@/src/stores/network';
-import { ThemeProvider } from '@/src/theme';
+import { ThemeProvider, useTheme } from '@/src/theme';
 import { Slot, useRouter, useSegments, type Href } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect } from 'react';
+import { useEffect, type ReactNode } from 'react';
+import { View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import '../global.css';
@@ -33,6 +35,16 @@ function AuthGate() {
   return <Slot />;
 }
 
+/** Applies NativeWind `dark` variant when theme resolves to dark (tailwind.config darkMode: 'class'). */
+function NativeWindRoot({ children }: { children: ReactNode }) {
+  const { resolved } = useTheme();
+  return (
+    <View className={`flex-1 bg-page-light dark:bg-page-dark ${resolved === 'dark' ? 'dark' : ''}`}>
+      {children}
+    </View>
+  );
+}
+
 export default function RootLayout() {
   const hydrate = useAuthStore((s) => s.hydrate);
   useEffect(() => {
@@ -41,10 +53,14 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
-        <ThemeProvider>
-          <StatusBar style="auto" />
-          <AuthGate />
-        </ThemeProvider>
+        <AppProviders>
+          <ThemeProvider>
+            <NativeWindRoot>
+              <StatusBar style="auto" />
+              <AuthGate />
+            </NativeWindRoot>
+          </ThemeProvider>
+        </AppProviders>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );

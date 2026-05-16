@@ -25,8 +25,8 @@ export function useMasters() {
 /* ────────────────────────── Surveys (server-side list) ────────────────────────── */
 
 /**
- * Server-backed paginated list. For the offline-first UI, prefer the
- * Watermelon observable in `useSurveysObservable` — this hook is for
+ * Server-backed paginated list. For the field surveyor offline-first UI,
+ * prefer `useLocalSurveys` / `useSurveysObservable` — this hook is for
  * supervisor / admin views.
  */
 export function useSurveysQuery(query: SurveyListQuery = {}) {

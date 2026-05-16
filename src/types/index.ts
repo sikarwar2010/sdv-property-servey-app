@@ -56,7 +56,7 @@ export interface PhotoRef {
   objectKey?: string;
   slot: 'front' | 'side';
   sizeKb: number;
-  /** Set when the image is compressed so WatermelonDB / sync can persist dimensions. */
+  /** Set when the image is compressed so local persistence / sync can store dimensions. */
   width?: number;
   height?: number;
   uploadStatus: 'idle' | 'uploading' | 'done' | 'failed';

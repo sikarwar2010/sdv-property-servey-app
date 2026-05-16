@@ -9,7 +9,7 @@
  *   uploadQueue.observe()   — Zustand observable for UI progress
  */
 import { env } from '@/src/config/env';
-import type { Photo } from '@/src/database/models';
+import type { StoredPhoto } from '@/src/database/local-types';
 import { photoRepo } from '@/src/database/survey.repo';
 import { uploadService } from '@/src/services/uploads/upload.service';
 import { useUploadStore } from '@/src/stores/upload';
@@ -49,22 +49,22 @@ async function doRun(): Promise<void> {
   store.reset();
 }
 
-async function uploadOne(photo: Photo): Promise<void> {
+async function uploadOne(photo: StoredPhoto): Promise<void> {
   try {
-    await photo.markUploading();
+    await photoRepo.markUploading(photo.surveyId, photo.id);
     const result = await uploadService.uploadPhoto(photo.localUri, {
       surveyId: photo.surveyId,
       slot: photo.slot,
-      capturedAt: photo.capturedAt.toISOString(),
+      capturedAt: photo.capturedAt,
       onProgress: (loaded, total) => {
         useUploadStore.getState().setProgress(photo.id, Math.round((loaded / total) * 100));
       },
     });
-    await photo.markDone(result.serverKey);
+    await photoRepo.markDone(photo.surveyId, photo.id, result.serverKey);
     useUploadStore.getState().clearProgress(photo.id);
   } catch (err) {
     const message = err instanceof Error ? err.message : 'upload_failed';
-    await photo.markFailed(message);
+    await photoRepo.markFailed(photo.surveyId, photo.id, message);
     useUploadStore.getState().clearProgress(photo.id);
   }
 }

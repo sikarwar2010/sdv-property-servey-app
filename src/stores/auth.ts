@@ -2,6 +2,7 @@ import { env } from '@/src/config/env';
 import { HttpError, onAuthFailed } from '@/src/services/api/client';
 import { authService } from '@/src/services/auth/auth.service';
 import { tokenStorage } from '@/src/services/auth/token-storage';
+import { bindAuthSessionReader } from '@/src/stores/auth-session';
 import type { AuthUser } from '@/src/types';
 import type { AuthUserDto } from '@/src/types/api';
 import * as SecureStore from 'expo-secure-store';
@@ -115,7 +116,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       let message = 'Sign in failed. Check your connection and try again.';
       if (err instanceof HttpError) {
         if (err.isNetwork || err.isTimeout) {
-          message = `Cannot reach API at ${env.apiBaseUrl}. Start the Go server and use the Android emulator (not Expo Go).`;
+          message = `Cannot reach API at ${env.apiBaseUrl}. Start the Go server and ensure the device can reach that URL (emulator: 10.0.2.2 for host localhost).`;
         } else {
           message = err.message;
         }
@@ -137,6 +138,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }
   },
 }));
+
+bindAuthSessionReader(() => useAuthStore.getState().user);
 
 onAuthFailed(() => {
   void useAuthStore.getState().clearSession();

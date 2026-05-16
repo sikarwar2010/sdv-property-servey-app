@@ -19,13 +19,7 @@ export default function SurveyDetailScreen() {
       setSurvey(null);
       return;
     }
-    let cancelled = false;
-    void surveyRowToRecord(wmSurvey).then((record) => {
-      if (!cancelled) setSurvey(record);
-    });
-    return () => {
-      cancelled = true;
-    };
+    setSurvey(surveyRowToRecord(wmSurvey));
   }, [wmSurvey]);
 
   if (loading) {

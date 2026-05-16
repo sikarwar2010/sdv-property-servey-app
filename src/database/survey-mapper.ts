@@ -1,4 +1,4 @@
-import type { Floor, Photo, Survey } from '@/src/database/models';
+import type { StoredFloor, StoredPhoto, StoredSurvey } from '@/src/database/local-types';
 import { ulbs } from '@/src/mocks/masters';
 import type { DraftSurvey } from '@/src/stores/survey';
 import type { FloorData, GpsCoord, PhotoRef, SurveyRecord } from '@/src/types';
@@ -9,24 +9,24 @@ function ulbNameFor(code: string): string {
   return ulbs.find((u) => u.code === code)?.name ?? code;
 }
 
-function addressLineFrom(s: Survey): string {
+function addressLineFrom(s: StoredSurvey): string {
   return [s.houseNo, s.street, s.locality, s.city, s.pinCode]
     .map((part) => String(part).trim())
     .filter(Boolean)
     .join(', ');
 }
 
-function gpsFromSurvey(s: Survey): GpsCoord | null {
+function gpsFromSurvey(s: StoredSurvey): GpsCoord | null {
   if (s.gpsLat == null || s.gpsLng == null) return null;
   return {
     latitude: s.gpsLat,
     longitude: s.gpsLng,
     accuracyMeters: s.gpsAccuracy ?? 0,
-    capturedAt: (s.gpsCapturedAt ?? new Date()).toISOString(),
+    capturedAt: s.gpsCapturedAt ?? new Date().toISOString(),
   };
 }
 
-function floorsToDraft(floorRows: Floor[]): FloorData[] {
+function floorsToDraft(floorRows: StoredFloor[]): FloorData[] {
   return floorRows.map((f) => ({
     id: f.id,
     floorNo: f.floorName.toLowerCase().replace(/\s+/g, '_') || 'ground',
@@ -38,7 +38,7 @@ function floorsToDraft(floorRows: Floor[]): FloorData[] {
   }));
 }
 
-function photosToDraft(photoRows: Photo[]): PhotoRef[] {
+function photosToDraft(photoRows: StoredPhoto[]): PhotoRef[] {
   return photoRows.map((p) => ({
     id: p.id,
     localUri: p.localUri,
@@ -51,8 +51,8 @@ function photosToDraft(photoRows: Photo[]): PhotoRef[] {
   }));
 }
 
-/** Maps a Watermelon survey row (+ children) into the in-memory wizard draft. */
-export function wmToDraft(s: Survey, floorRows: Floor[], photoRows: Photo[]): DraftSurvey {
+/** Maps a persisted survey into the in-memory wizard draft. */
+export function storedToDraft(s: StoredSurvey): DraftSurvey {
   return {
     id: s.localId,
     wmSurveyId: s.id,
@@ -89,18 +89,19 @@ export function wmToDraft(s: Survey, floorRows: Floor[], photoRows: Photo[]): Dr
     situation: s.situation || 'interior',
     plotSqft: s.plotSqft,
     plinthSqft: s.plinthSqft,
-    floors: floorsToDraft(floorRows),
+    floors: floorsToDraft(s.floors),
     waterSource: s.waterSource || 'municipal',
     sanitation: s.sanitationType || 'sewer',
     solidWaste: s.solidWasteType || 'door_to_door',
     electricityNo: s.electricityNo,
     gps: gpsFromSurvey(s),
-    photos: photosToDraft(photoRows),
+    photos: photosToDraft(s.photos),
   };
 }
 
-/** Maps a Watermelon survey row (+ children) into a list/detail card record. */
-export function wmToRecord(s: Survey, floorRows: Floor[], photoRows: Photo[]): SurveyRecord {
+/** Maps a persisted survey into a list/detail card record. */
+export function storedToRecord(s: StoredSurvey): SurveyRecord {
+  const floorRows = [...s.floors].sort((a, b) => a.position - b.position);
   const builtUp = floorRows.reduce((acc, f) => acc + f.areaSqft, 0);
   return {
     id: s.id,
@@ -122,26 +123,22 @@ export function wmToRecord(s: Survey, floorRows: Floor[], photoRows: Photo[]): S
     builtUpSqft: builtUp,
     floors: floorsToDraft(floorRows),
     gps: gpsFromSurvey(s) ?? undefined,
-    photos: photosToDraft(photoRows),
-    createdAt: s.createdAt.toISOString(),
-    updatedAt: s.updatedAt.toISOString(),
-    syncedAt: s.syncedAt?.toISOString(),
+    photos: photosToDraft(s.photos),
+    createdAt: s.createdAt,
+    updatedAt: s.updatedAt,
+    syncedAt: s.syncedAt,
     step: Math.max(1, s.wizardStep || 1),
     totalSteps: TOTAL_STEPS,
+    qcRemarks: s.qcRemarks,
   };
 }
 
-export async function surveyRowToRecord(s: Survey): Promise<SurveyRecord> {
-  const [floorRows, photoRows] = await Promise.all([s.floors.fetch(), s.photos.fetch()]);
-  return wmToRecord(s, floorRows, photoRows);
+/** @deprecated Use `storedToRecord` — kept for incremental refactors. */
+export function surveyRowToRecord(s: StoredSurvey): SurveyRecord {
+  return storedToRecord(s);
 }
 
-export async function surveyRowToDraft(s: Survey): Promise<DraftSurvey> {
-  const [floorRows, photoRows] = await Promise.all([s.floors.fetch(), s.photos.fetch()]);
-  return wmToDraft(s, floorRows, photoRows);
-}
-
-export function computeKpiFromRows(rows: Survey[]): import('@/src/types').KpiData {
+export function computeKpiFromRows(rows: StoredSurvey[]): import('@/src/types').KpiData {
   const startOfToday = new Date();
   startOfToday.setHours(0, 0, 0, 0);
   const todayMs = startOfToday.getTime();
@@ -153,7 +150,8 @@ export function computeKpiFromRows(rows: Survey[]): import('@/src/types').KpiDat
   let today = 0;
 
   for (const s of rows) {
-    if (s.createdAt.getTime() >= todayMs) today += 1;
+    const created = new Date(s.createdAt).getTime();
+    if (created >= todayMs) today += 1;
     switch (s.status) {
       case 'draft':
         drafts += 1;

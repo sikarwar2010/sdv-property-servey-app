@@ -29,7 +29,8 @@
         "android.permission.WRITE_EXTERNAL_STORAGE",
         "android.permission.READ_EXTERNAL_STORAGE",
         "android.permission.CAMERA",
-        "android.permission.RECEIVE_BOOT_COMPLETED"
+        "android.permission.RECEIVE_BOOT_COMPLETED",
+        "android.permission.RECORD_AUDIO"
       ],
       "config": {
         "googleMaps": {
@@ -44,7 +45,6 @@
     },
     "plugins": [
       "expo-dev-client",
-      "./plugins/withWatermelonNative",
       "expo-router",
       [
         "react-native-maps",
@@ -93,7 +93,11 @@
       "apiBaseUrl": "https://api.sdvedutech.in/v1",
       "apiBaseUrlDev": "",
       "surveySyncApiKey": "",
-      "_comment_apiBaseUrlDev": "Physical phone on same Wi‑Fi: set to http://YOUR_PC_LAN_IP:8080/v1 (emulator uses 10.0.2.2 automatically)"
+      "_comment_apiBaseUrlDev": "Physical phone on same Wi‑Fi: set to http://YOUR_PC_LAN_IP:8080/v1 (emulator uses 10.0.2.2 automatically)",
+      "router": {},
+      "eas": {
+        "projectId": "60242132-5000-44b7-a800-6fc59e7f7ca4"
+      }
     }
   }
 }

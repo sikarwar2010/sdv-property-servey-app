@@ -1,17 +1,29 @@
 import { AppButton, AppCard, AppHeader, SectionLabel } from '@/src/components';
 import { useLocalSurveys } from '@/src/hooks/use-local-surveys';
 import { useIsOnline, useNetworkStore } from '@/src/stores/network';
-import { useSurveyStore } from '@/src/stores/survey';
+import { syncEngine } from '@/src/sync/sync-engine';
 import { timeAgo } from '@/src/utils/format';
 import { Ionicons } from '@expo/vector-icons';
+import { useState } from 'react';
 import { ScrollView, Text, View } from 'react-native';
 
 export default function OfflineScreen() {
   const online = useIsOnline();
   const lastSyncAt = useNetworkStore((s) => s.lastSyncAt);
-  const queue = useSurveyStore((s) => s.syncQueue);
   const { surveys } = useLocalSurveys();
+  const [busy, setBusy] = useState(false);
+  const pending = surveys.filter((s) => s.status === 'pending' || s.status === 'failed');
   const drafts = surveys.filter((s) => s.status === 'draft');
+
+  const runSync = async () => {
+    if (!online || busy) return;
+    setBusy(true);
+    try {
+      await syncEngine.run();
+    } finally {
+      setBusy(false);
+    }
+  };
 
   return (
     <View className="flex-1 bg-page-light dark:bg-page-dark">
@@ -34,7 +46,7 @@ export default function OfflineScreen() {
           <Text
             className={['text-helper mt-1 text-center', online ? 'text-success-ink' : 'text-warning-ink'].join(' ')}
           >
-            Last sync {timeAgo(lastSyncAt)} · {queue.length} queued · {drafts.length} draft
+            Last sync {timeAgo(lastSyncAt)} · {pending.length} to send · {drafts.length} draft
             {drafts.length === 1 ? '' : 's'}
           </Text>
         </View>
@@ -59,8 +71,9 @@ export default function OfflineScreen() {
         <AppButton
           label="Try sync now"
           iconLeft="sync"
-          onPress={() => undefined}
-          disabled={!online}
+          onPress={() => void runSync()}
+          disabled={!online || busy}
+          loading={busy}
           fullWidth
           className="mt-5"
         />

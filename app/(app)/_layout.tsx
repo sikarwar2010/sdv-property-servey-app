@@ -35,13 +35,6 @@ export default function AppLayout() {
         }}
       />
       <Tabs.Screen
-        name="map"
-        options={{
-          title: 'Map',
-          tabBarIcon: ({ color, size }) => <Ionicons name="map-outline" size={size - 2} color={color} />,
-        }}
-      />
-      <Tabs.Screen
         name="sync"
         options={{
           title: 'Sync',
@@ -56,6 +49,7 @@ export default function AppLayout() {
         }}
       />
       {/* Hidden routes */}
+      <Tabs.Screen name="map" options={{ href: null }} />
       <Tabs.Screen name="notifications" options={{ href: null }} />
       <Tabs.Screen name="offline" options={{ href: null }} />
       <Tabs.Screen name="search" options={{ href: null }} />

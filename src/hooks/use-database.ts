@@ -1,19 +1,13 @@
 /**
- * Live, offline-first WatermelonDB observable hooks.
- *
- * Unlike React Query (server-backed), these subscribe directly to the
- * SQLite layer so the UI updates instantly when local mutations land,
- * with no network round-trip. Use these for the surveys list, draft
- * count, sync queue counters, and any other UI that must reflect the
- * local source of truth in real time.
+ * Live local survey hooks — subscribe to AsyncStorage-backed store updates.
  */
-import { useEffect, useState } from 'react';
 import { surveyRepo, floorRepo, photoRepo } from '@/src/database/survey.repo';
-import type { Survey, Floor, Photo } from '@/src/database/models';
+import type { StoredFloor, StoredPhoto, StoredSurvey } from '@/src/database/local-types';
 import type { SurveyStatus } from '@/src/types';
+import { useEffect, useState } from 'react';
 
 export function useSurveysObservable(filter?: { status?: SurveyStatus; q?: string }) {
-  const [surveys, setSurveys] = useState<Survey[]>([]);
+  const [surveys, setSurveys] = useState<StoredSurvey[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -31,11 +25,12 @@ export function useSurveysObservable(filter?: { status?: SurveyStatus; q?: strin
 }
 
 export function useSurveyObservable(id: string | undefined) {
-  const [survey, setSurvey] = useState<Survey | null>(null);
+  const [survey, setSurvey] = useState<StoredSurvey | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!id) {
+      setSurvey(null);
       setLoading(false);
       return;
     }
@@ -53,20 +48,20 @@ export function useSurveyObservable(id: string | undefined) {
 }
 
 export function useFloorsObservable(surveyId: string | undefined) {
-  const [floors, setFloors] = useState<Floor[]>([]);
+  const [floors, setFloors] = useState<StoredFloor[]>([]);
   useEffect(() => {
     if (!surveyId) return;
-    const sub = floorRepo.observeForSurvey(surveyId).subscribe(setFloors);
+    const sub = floorRepo.observeForSurvey(surveyId).subscribe({ next: setFloors });
     return () => sub.unsubscribe();
   }, [surveyId]);
   return floors;
 }
 
 export function usePhotosObservable(surveyId: string | undefined) {
-  const [photos, setPhotos] = useState<Photo[]>([]);
+  const [photos, setPhotos] = useState<StoredPhoto[]>([]);
   useEffect(() => {
     if (!surveyId) return;
-    const sub = photoRepo.observeForSurvey(surveyId).subscribe(setPhotos);
+    const sub = photoRepo.observeForSurvey(surveyId).subscribe({ next: setPhotos });
     return () => sub.unsubscribe();
   }, [surveyId]);
   return photos;

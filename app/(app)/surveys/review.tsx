@@ -1,16 +1,16 @@
 import { AppButton, AppCard, AppHeader, PropertyPhotosGisNoticeRow, SectionLabel, Toast } from '@/src/components';
 import {
-  formatOwnershipDisplay,
-  propertyTypes,
-  propertyUses,
-  relationships,
-  roadTypes,
-  sanitationTypes,
-  situations,
-  solidWasteTypes,
-  taxRateZones,
-  usageTypes,
-  waterSources,
+    formatOwnershipDisplay,
+    propertyTypes,
+    propertyUses,
+    relationships,
+    roadTypes,
+    sanitationTypes,
+    situations,
+    solidWasteTypes,
+    taxRateZones,
+    usageTypes,
+    waterSources,
 } from '@/src/mocks/masters';
 import { useIsOnline } from '@/src/stores/network';
 import { useSurveyStore } from '@/src/stores/survey';
@@ -31,6 +31,7 @@ export default function ReviewScreen() {
   const update = useSurveyStore((s) => s.updateDraft);
   const online = useIsOnline();
   const [toast, setToast] = useState(false);
+  const [toastMessage, setToastMessage] = useState('');
   const [toastError, setToastError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -73,28 +74,29 @@ export default function ReviewScreen() {
     if (!canSubmit || submitting) return;
     setSubmitting(true);
     setToastError(null);
-    try {
-      await submit();
-      setToast(true);
-      setTimeout(() => router.replace('/(app)/dashboard'), 600);
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : 'Could not save or sync';
-      setToastError(msg);
-    } finally {
-      setSubmitting(false);
+    const outcome = await submit();
+    setSubmitting(false);
+    if (!outcome.ok) {
+      setToastError(outcome.message);
+      return;
     }
+    setToastMessage(outcome.message);
+    setToast(true);
+    setTimeout(() => router.replace(outcome.mode === 'queued' ? '/(app)/sync' : '/(app)/dashboard'), 900);
   };
 
   return (
     <View className="flex-1 bg-page-light dark:bg-page-dark">
-      <AppHeader title="Review" subtitle="Check details here; submit sends data to the server when online" />
+      <AppHeader
+        title="Review"
+        subtitle={online ? 'Submit saves on device and sends to server' : 'Submit saves on device — sync when online'}
+      />
       <ScrollView contentContainerStyle={{ padding: 14, paddingBottom: 120 }}>
         {!draft.wmSurveyId ? (
           <View className="bg-danger-soft border border-danger/30 rounded-xl p-3 mb-3 flex-row items-start">
             <Ionicons name="alert-circle" size={16} color="#DC2626" />
             <Text className="flex-1 ml-2 text-caption text-danger-ink">
-              This draft is not linked to local storage. Go back to New survey and tap Continue once to create the
-              record on this device.
+              Saving on device… go back to Home → New property survey and wait a moment, then try again.
             </Text>
           </View>
         ) : null}
@@ -225,8 +227,8 @@ export default function ReviewScreen() {
 
       <Toast
         visible={toast}
-        title={online ? 'Survey submitted' : 'Queued for sync'}
-        message={online ? 'Saved locally; syncing to server' : 'Saved locally; will sync when online'}
+        title="Done"
+        message={toastMessage}
         tone="success"
         onHide={() => setToast(false)}
       />

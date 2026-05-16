@@ -1,6 +1,8 @@
-import { useEffect } from 'react';
-import { create } from 'zustand';
+import { useAuthStore } from '@/src/stores/auth';
+import { syncEngine } from '@/src/sync/sync-engine';
 import NetInfo from '@react-native-community/netinfo';
+import { useEffect, useRef } from 'react';
+import { create } from 'zustand';
 
 interface NetState {
   online: boolean;
@@ -30,9 +32,15 @@ export function useIsOnline(): boolean {
 /** Subscribe to NetInfo and pipe into store. Mount once in root layout. */
 export function useNetworkSubscriber(): void {
   const setOnline = useNetworkStore((s) => s.setOnline);
+  const wasOnline = useRef(true);
   useEffect(() => {
     const unsub = NetInfo.addEventListener((state) => {
-      setOnline(Boolean(state.isConnected) && state.isInternetReachable !== false);
+      const online = Boolean(state.isConnected) && state.isInternetReachable !== false;
+      setOnline(online);
+      if (online && !wasOnline.current && useAuthStore.getState().user) {
+        void syncEngine.run();
+      }
+      wasOnline.current = online;
     });
     return () => unsub();
   }, [setOnline]);

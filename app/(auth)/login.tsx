@@ -38,9 +38,16 @@ export default function LoginScreen() {
           keyboardShouldPersistTaps="handled"
         >
           <Text className="text-h1 font-medium text-ink-primary-light dark:text-ink-primary-dark">Sign in</Text>
-          <Text className="text-helper text-ink-tertiary-light dark:text-ink-tertiary-dark mt-1 mb-6">
-            Use credentials issued by your ULB
+          <Text className="text-helper text-ink-tertiary-light dark:text-ink-tertiary-dark mt-1 mb-2">
+            Sign in, capture surveys, submit to send data to the server.
           </Text>
+          {__DEV__ ? (
+            <Text className="text-caption text-ink-tertiary-light dark:text-ink-tertiary-dark mb-6">
+              Dev: Go API on port 8080 · `bun run go` (Expo Go) or `bun run android` (emulator build)
+            </Text>
+          ) : (
+            <View className="mb-6" />
+          )}
 
           <AppInput
             label="Email"

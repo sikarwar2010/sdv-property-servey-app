@@ -1,19 +1,61 @@
+import { AppButton, AppCard, EmptyState, OfflineBanner, SectionLabel, StatusBadge } from '@/src/components';
+import { useLocalSurveys } from '@/src/hooks/use-local-surveys';
+import { useIsOnline } from '@/src/stores/network';
+import { useIsSyncing, useSyncStore } from '@/src/stores/sync';
+import { syncEngine } from '@/src/sync/sync-engine';
+import type { SurveyRecord, SyncQueueItem } from '@/src/types';
+import { Ionicons } from '@expo/vector-icons';
+import { useMemo, useState } from 'react';
 import { ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
-import { AppButton, AppCard, OfflineBanner, SectionLabel, StatusBadge, EmptyState } from '@/src/components';
-import { useSurveyStore } from '@/src/stores/survey';
-import { useIsOnline } from '@/src/stores/network';
+
+function toQueueItem(s: SurveyRecord, syncingId: string | null): SyncQueueItem {
+  const status =
+    syncingId === s.id
+      ? 'syncing'
+      : s.status === 'failed'
+        ? 'failed'
+        : 'pending';
+  return {
+    id: s.id,
+    surveyId: s.id,
+    ownerName: s.ownerName,
+    wardNo: s.wardNo,
+    status,
+    retryCount: 0,
+    errorMessage: s.status === 'failed' ? 'Sync failed — tap Retry' : undefined,
+  };
+}
 
 export default function SyncScreen() {
-  const queue = useSurveyStore((s) => s.syncQueue);
   const online = useIsOnline();
+  const isSyncing = useIsSyncing();
+  const lastError = useSyncStore((s) => s.lastError);
+  const lastSyncAt = useSyncStore((s) => s.lastSyncAt);
+  const { surveys } = useLocalSurveys();
+  const [busy, setBusy] = useState(false);
+
+  const queue = useMemo(() => {
+    const rows = surveys.filter((s) => s.status === 'pending' || s.status === 'syncing' || s.status === 'failed');
+    const syncingId = isSyncing ? rows.find((s) => s.status === 'syncing' || s.status === 'pending')?.id ?? null : null;
+    return rows.map((s) => toQueueItem(s, syncingId));
+  }, [surveys, isSyncing]);
 
   const pending = queue.filter((q) => q.status === 'pending' || q.status === 'syncing');
   const failed = queue.filter((q) => q.status === 'failed');
   const total = queue.length;
   const syncing = queue.find((q) => q.status === 'syncing');
-  const overallProgress = syncing ? (syncing.progress ?? 0) : pending.length === 0 ? 100 : 0;
+  const overallProgress = syncing ? (syncing.progress ?? 50) : pending.length === 0 ? 100 : 0;
+
+  const runSync = async () => {
+    if (!online || busy || isSyncing) return;
+    setBusy(true);
+    try {
+      await syncEngine.run();
+    } finally {
+      setBusy(false);
+    }
+  };
 
   return (
     <View className="flex-1 bg-page-light dark:bg-page-dark">
@@ -22,8 +64,14 @@ export default function SyncScreen() {
         <View className="px-4 pt-3 pb-3.5 border-b border-line-subtle">
           <Text className="text-h2 font-medium text-ink-primary-light dark:text-ink-primary-dark">Sync queue</Text>
           <Text className="text-helper text-ink-tertiary-light dark:text-ink-tertiary-dark mt-0.5">
-            {online ? 'Connected · auto-uploading' : 'Offline · will resume when online'}
+            {online ? 'Connected · tap Sync now to upload' : 'Offline · will resume when online'}
+            {lastSyncAt ? ` · Last sync ${new Date(lastSyncAt).toLocaleTimeString()}` : ''}
           </Text>
+          {lastError ? (
+            <Text className="text-caption text-danger mt-1" numberOfLines={2}>
+              {lastError}
+            </Text>
+          ) : null}
         </View>
       </SafeAreaView>
 
@@ -38,14 +86,20 @@ export default function SyncScreen() {
                 {pending.length} pending · {failed.length} failed
               </Text>
             </View>
-            <AppButton label="Sync now" iconLeft="sync" size="sm" onPress={() => undefined} disabled={!online} />
+            <AppButton
+              label={busy || isSyncing ? 'Syncing…' : 'Sync now'}
+              iconLeft="sync"
+              size="sm"
+              onPress={() => void runSync()}
+              disabled={!online || busy || isSyncing}
+            />
           </View>
           <View className="h-1.5 bg-line-subtle rounded overflow-hidden">
             <View className="h-full bg-brand" style={{ width: `${overallProgress}%` }} />
           </View>
           <Text className="text-caption text-ink-tertiary-light dark:text-ink-tertiary-dark mt-1.5">
             {syncing
-              ? `Uploading 1 of ${pending.length} · ${overallProgress}%`
+              ? `Uploading · ${overallProgress}%`
               : pending.length === 0
                 ? 'All up to date'
                 : 'Waiting to start'}
@@ -103,11 +157,18 @@ export default function SyncScreen() {
                     {q.ownerName}
                   </Text>
                   <Text numberOfLines={1} className="text-caption text-danger">
-                    {q.errorMessage ?? 'Unknown error'} · retry in 2 m
+                    {q.errorMessage ?? 'Unknown error'}
                   </Text>
                   <Text className="text-caption text-ink-disabled-light">Retried {q.retryCount} times</Text>
                 </View>
-                <AppButton label="Retry" iconLeft="refresh" variant="outline" size="sm" onPress={() => undefined} />
+                <AppButton
+                  label="Retry"
+                  iconLeft="refresh"
+                  variant="outline"
+                  size="sm"
+                  onPress={() => void runSync()}
+                  disabled={!online || busy || isSyncing}
+                />
               </View>
             ))}
           </>
